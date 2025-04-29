@@ -1,0 +1,340 @@
+{
+  "coimbatore_city_bus_routes": [
+    {
+      "route_number": "32",
+      "from": "Gandhipuram",
+      "to": "Govanur",
+      "operator": "TNSTC",
+      "bus_stops": ["New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam"],
+      "daily_buses": "Several",
+      "travel_time": "01:15 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "05:45",
+          "last_bus": "21:30",
+          "departures": ["05:45", "06:30", "06:45", "08:15", "09:15", "09:30", "10:50", "12:00", "13:15", "13:30", "14:40", "15:40", "16:15", "17:15", "18:30", "18:50", "20:00", "21:30"]
+        },
+        "from_govanur": {
+          "first_bus": "07:00",
+          "last_bus": "21:15",
+          "departures": ["07:00", "07:50", "08:15", "09:30", "10:40", "11:50", "12:15", "13:15", "14:30", "14:50", "16:00", "17:00", "17:30", "18:40", "20:00", "20:15", "21:15"]
+        }
+      }
+    },
+    {
+      "route_number": "32A",
+      "from": "Railway Station",
+      "to": "Press Colony",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Poo Market", "New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam", "Veerapandi Pirivu"],
+      "daily_buses": 7,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_railway_station": {
+          "first_bus": "06:30",
+          "last_bus": "21:45",
+          "departures": ["06:30", "08:00", "09:15", "11:00", "11:30", "11:45", "14:10", "16:20", "18:50", "19:20", "21:00", "21:45"]
+        },
+        "from_press_colony": {
+          "first_bus": "07:50",
+          "last_bus": "23:00",
+          "departures": ["07:50", "10:00", "10:20", "12:20", "12:30", "12:50", "15:00", "15:15", "15:30", "17:00", "18:00", "20:00", "20:40", "23:00"]
+        }
+      }
+    },
+    {
+      "route_number": "32B",
+      "from": "Ukkadam",
+      "to": "Thirumalai Naicken Palayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Poo Market", "New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam"],
+      "daily_buses": 5,
+      "travel_time": "01:15 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "06:15",
+          "last_bus": "18:15",
+          "departures": ["06:15", "09:15", "12:15", "15:15", "18:15"]
+        },
+        "from_thirumalai_naicken_palayam": {
+          "first_bus": "07:45",
+          "last_bus": "19:45",
+          "departures": ["07:45", "10:45", "13:45", "16:45", "19:45"]
+        }
+      }
+    },
+    {
+      "route_number": "32D",
+      "from": "Railway Station",
+      "to": "Veerapandi",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Poo Market", "New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam", "Veerapandi Pirivu"],
+      "daily_buses": 7,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_railway_station": {
+          "first_bus": "06:00",
+          "last_bus": "19:30",
+          "departures": ["06:00", "08:30", "11:15", "14:00", "16:30", "19:30"]
+        },
+        "from_veerapandi": {
+          "first_bus": "07:15",
+          "last_bus": "20:50",
+          "departures": ["07:15", "10:00", "12:40", "15:15", "17:15", "18:00", "20:50"]
+        }
+      }
+    },
+    {
+      "route_number": "32F",
+      "from": "Gandhipuram",
+      "to": "Arivoli Nagar",
+      "operator": "TNSTC",
+      "bus_stops": ["New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam", "Veerapandi Pirivu"],
+      "daily_buses": 6,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "07:50",
+          "last_bus": "20:00",
+          "departures": ["07:50", "10:00", "12:20", "14:00", "17:30", "20:00"]
+        },
+        "from_arivoli_nagar": {
+          "first_bus": "06:00",
+          "last_bus": "18:30",
+          "departures": ["06:00", "09:00", "11:15", "13:00", "16:00", "18:30"]
+        }
+      }
+    },
+    {
+      "route_number": "32G",
+      "from": "Gandhipuram",
+      "to": "Vellamadai",
+      "operator": "TNSTC",
+      "bus_stops": ["New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam", "Veerapandi Pirivu"],
+      "daily_buses": 7,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "05:00",
+          "last_bus": "19:40",
+          "departures": ["05:00", "06:00", "07:15", "08:15", "09:50", "10:45", "12:30", "13:40", "15:15", "16:40", "18:00", "19:40"]
+        },
+        "from_vellamadai": {
+          "first_bus": "06:00",
+          "last_bus": "21:15",
+          "departures": ["06:00", "06:50", "08:30", "09:40", "11:15", "12:15", "13:50", "15:15", "16:40", "18:15", "19:30", "21:15"]
+        }
+      }
+    },
+    {
+      "route_number": "32H",
+      "from": "Ukkadam",
+      "to": "Kasthuripalayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Poo Market", "New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam"],
+      "daily_buses": 5,
+      "travel_time": "01:20 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "05:00",
+          "last_bus": "17:30",
+          "departures": ["05:00", "08:00", "11:00", "14:30", "17:30"]
+        },
+        "from_kasthuripalayam": {
+          "first_bus": "06:30",
+          "last_bus": "19:00",
+          "departures": ["06:30", "09:30", "12:30", "16:00", "19:00"]
+        }
+      }
+    },
+    {
+      "route_number": "32K",
+      "from": "Railway Station",
+      "to": "Govanur",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Poo Market", "New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam"],
+      "daily_buses": 6,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_railway_station": {
+          "first_bus": "05:00",
+          "last_bus": "18:30",
+          "departures": ["05:00", "07:30", "10:00", "13:00", "15:45", "18:30"]
+        },
+        "from_govanur": {
+          "first_bus": "06:20",
+          "last_bus": "20:00",
+          "departures": ["06:20", "08:45", "11:30", "14:20", "17:00", "20:00"]
+        }
+      }
+    },
+    {
+      "route_number": "32N",
+      "from": "Ukkadam",
+      "to": "Veerapandi Pirivu",
+      "operator": "TNSTC",
+      "bus_stops": ["Poo Market", "New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam"],
+      "daily_buses": 4,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "09:00",
+          "last_bus": "19:40",
+          "departures": ["09:00", "11:45", "14:20", "19:40"]
+        },
+        "from_veerapandi_pirivu": {
+          "first_bus": "10:30",
+          "last_bus": "21:10",
+          "departures": ["10:30", "13:30", "15:30", "21:10"]
+        }
+      }
+    },
+    {
+      "route_number": "33A",
+      "from": "Gandhipuram",
+      "to": "Kinathukadavu",
+      "operator": "TNSTC",
+      "bus_stops": ["Railway Station", "Town Hall", "Ukkadam", "Sundarapuram", "SIDCO", "Eachanari", "Malumichampatti", "Othakalmandapam", "Premier Mills"],
+      "daily_buses": "Several",
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "05:15",
+          "last_bus": "19:20",
+          "departures": ["05:15", "05:45", "06:00", "08:00", "08:15", "08:45", "09:15", "10:30", "10:50", "11:00", "11:20", "13:00", "13:20", "13:45", "14:40", "15:00", "16:10", "16:30", "16:45", "18:45", "19:10", "19:20"]
+        },
+        "from_kinathukadavu": {
+          "first_bus": "06:45",
+          "last_bus": "21:00",
+          "departures": ["06:45", "07:00", "07:30", "09:15", "09:30", "09:45", "10:00", "11:50", "12:00", "12:15", "12:45", "14:00", "14:50", "15:10", "15:20", "17:20", "17:45", "17:50", "18:00", "19:50", "20:15", "20:30", "21:00"]
+        }
+      }
+    },
+    {
+      "route_number": "35",
+      "from": "Avarampalayam",
+      "to": "Karadimadai",
+      "operator": "TNSTC",
+      "bus_stops": ["Railway Station", "Government Hospital", "Town Hall", "Selvapuram", "Perur", "Mathampatti", "Kuppanur"],
+      "daily_buses": 7,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_avarampalayam": {
+          "first_bus": "06:20",
+          "last_bus": "20:45",
+          "departures": ["06:20", "08:40", "11:00", "13:20", "15:30", "18:15", "20:45"]
+        },
+        "from_karadimadai": {
+          "first_bus": "07:20",
+          "last_bus": "19:30",
+          "departures": ["07:20", "09:45", "12:10", "14:20", "16:45", "19:30"]
+        }
+      }
+    },
+    {
+      "route_number": "35A",
+      "from": "Gandhipuram",
+      "to": "Karadimadai",
+      "operator": "TNSTC",
+      "bus_stops": ["Railway Station", "Government Hospital", "Town Hall", "Vedapatti", "Thondamuthur", "Mathampatti", "Kuppanur"],
+      "daily_buses": 4,
+      "travel_time": "01:10 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "07:00",
+          "last_bus": "20:15",
+          "departures": ["07:00", "13:15", "17:50", "20:15"]
+        },
+        "from_karadimadai": {
+          "first_bus": "05:45",
+          "last_bus": "19:10",
+          "departures": ["05:45", "08:20", "14:40", "19:10"]
+        }
+      }
+    },
+    {
+      "route_number": "35J",
+      "from": "Gandhipuram",
+      "to": "Karadimadai",
+      "operator": "TNSTC",
+      "bus_stops": ["New Bus Stand", "Goundampalayam", "Anna Nagar", "Thondamuthur", "Mathampatti", "Kuppanur"],
+      "daily_buses": 3,
+      "travel_time": "01:15 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "13:20",
+          "last_bus": "19:30",
+          "departures": ["13:20", "16:40", "19:30"]
+        },
+        "from_karadimadai": {
+          "first_bus": "09:45",
+          "last_bus": "20:45",
+          "departures": ["09:45", "15:00", "18:15", "20:45"]
+        }
+      }
+    },
+    {
+      "route_number": "36",
+      "from": "PN Pudur",
+      "to": "Veeriyampalayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Saibaba Colony", "Gandhipuram", "Lakshmi Mills", "Peelamedu", "PSG Tech", "Hope College", "PSG Arts", "SITRA", "Nehru Nagar"],
+      "daily_buses": 5,
+      "travel_time": "01:20 hrs",
+      "timings": {
+        "from_pn_pudur": {
+          "first_bus": "06:40",
+          "last_bus": "20:10",
+          "departures": ["06:40", "10:40", "13:00", "15:45", "20:10"]
+        },
+        "from_veeriyampalayam": {
+          "first_bus": "05:40",
+          "last_bus": "17:00",
+          "departures": ["05:40", "09:15", "11:50", "14:20", "17:00"]
+        }
+      }
+    },
+    {
+      "route_number": "40",
+      "from": "GCT",
+      "to": "Serayampalayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Saibaba Colony", "Gandhipuram", "Lakshmi Mills", "Peelamedu", "Hope College", "PSG Arts", "SITRA", "KMCH", "Nehru Nagar"],
+      "daily_buses": 7,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gct": {
+          "first_bus": "06:40",
+          "last_bus": "20:40",
+          "departures": ["06:40", "09:00", "11:40", "14:00", "16:15", "19:20", "20:40"]
+        },
+        "from_serayampalayam": {
+          "first_bus": "07:45",
+          "last_bus": "21:45",
+          "departures": ["07:45", "10:30", "12:45", "15:10", "17:30", "19:30", "21:45"]
+        }
+      }
+    },
+    {
+      "route_number": "40A",
+      "from": "Gandhipuram",
+      "to": "Somanur",
+      "operator": "TNSTC",
+      "bus_stops": ["Lakshmi Mills", "Peelamedu", "Hope College", "SITRA", "KMCH", "Chinniyampalayam", "Neelambur", "Muthugoundanpudur", "Rasipalayam", "Madhapur"],
+      "daily_buses": 7,
+      "travel_time": "01:20 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "05:40",
+          "last_bus": "20:00",
+          "departures": ["05:40", "08:40", "11:45", "14:15", "17:20", "20:00"]
+        },
+        "from_somanur": {
+          "first_bus": "04:40",
+          "last_bus": "18:40",
+          "departures": ["04:40", "07:00", "10:15", "13:10", "15:40", "18:40"]
+        }
+      }
+    }
+  ]
+}

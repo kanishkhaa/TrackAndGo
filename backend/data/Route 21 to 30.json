@@ -1,0 +1,298 @@
+{
+  "coimbatore_city_bus_routes": [
+    {
+      "route_number": "21",
+      "from": "Gandhipuram",
+      "to": "Kembanur",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Gandhi Park", "Veerakeralam", "Vedapatti", "Thondamuthur"],
+      "daily_buses": 6,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "06:45",
+          "last_bus": "19:45",
+          "departures": ["06:45", "08:45", "12:45", "15:30", "17:40", "19:45"]
+        },
+        "from_kembanur": {
+          "first_bus": "07:45",
+          "last_bus": "21:15",
+          "departures": ["07:45", "11:50", "14:10", "16:30", "18:45", "21:15"]
+        }
+      }
+    },
+    {
+      "route_number": "21A",
+      "from": "Gandhipuram",
+      "to": "Narasipuram",
+      "operator": "TNSTC",
+      "bus_stops": ["Railway Station", "Government Hospital", "Town Hall", "Gandhi Park", "Vedapatti", "Thondamuthur", "Devarayapuram"],
+      "daily_buses": "Several",
+      "travel_time": "Not specified",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "07:00",
+          "last_bus": "21:30",
+          "departures": ["07:00", "08:00", "08:15", "08:45", "09:50", "10:45", "11:00", "13:00", "14:00", "14:30", "15:10", "15:45", "16:45", "17:20", "18:15", "18:40", "19:30", "20:15", "21:30"]
+        },
+        "from_narasipuram": {
+          "first_bus": "06:45",
+          "last_bus": "21:30",
+          "departures": ["06:45", "07:00", "07:20", "08:20", "09:20", "09:45", "11:20", "12:20", "13:40", "14:20", "15:15", "16:00", "16:45", "17:10", "18:15", "19:10", "19:45", "20:00", "21:30"]
+        }
+      }
+    },
+    {
+      "route_number": "22",
+      "from": "Sowripalayam",
+      "to": "Sugarcane Institute",
+      "operator": "TNSTC",
+      "bus_stops": ["Puliakulam", "Sungam", "Government Hospital", "Poo Market", "RS Puram", "Agri University", "Seeranaickenpalayam"],
+      "daily_buses": "Not specified",
+      "travel_time": "00:45 hrs",
+      "timings": {
+        "from_sowripalayam": {
+          "first_bus": "07:15",
+          "last_bus": "19:45",
+          "departures": ["07:15", "09:15", "11:00", "12:45", "15:15", "18:15", "19:45"]
+        },
+        "from_sugarcane_institute": {
+          "first_bus": "06:30",
+          "last_bus": "20:40",
+          "departures": ["06:30", "08:30", "10:00", "11:45", "14:20", "19:00", "20:40"]
+        }
+      }
+    },
+    {
+      "route_number": "24",
+      "from": "Ukkadam",
+      "to": "Kalapatti",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Railway Station", "Gandhipuram", "Ganapathy", "Prozone Mall", "Saravanampatti", "Vilankurichi"],
+      "daily_buses": 9,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "04:00",
+          "last_bus": "19:50",
+          "departures": ["04:00", "05:50", "07:40", "09:50", "11:50", "14:00", "16:00", "17:50", "19:50"]
+        },
+        "from_kalapatti": {
+          "first_bus": "05:00",
+          "last_bus": "20:50",
+          "departures": ["05:00", "06:45", "09:00", "10:50", "12:50", "15:00", "16:50", "18:50", "20:50"]
+        }
+      }
+    },
+    {
+      "route_number": "24A",
+      "from": "Ukkadam",
+      "to": "Thennampalayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Railway Station", "Gandhipuram", "Ganapathy", "Prozone Mall", "Saravanampatti", "Vilankurichi", "Kalapatti", "Serayampalayam", "Arasur"],
+      "daily_buses": 6,
+      "travel_time": "Not specified",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "04:45",
+          "last_bus": "18:40",
+          "departures": ["04:45", "07:15", "10:00", "13:15", "15:45", "18:40"]
+        },
+        "from_thennampalayam": {
+          "first_bus": "06:00",
+          "last_bus": "20:00",
+          "departures": ["06:00", "08:30", "11:30", "14:30", "17:15", "20:00"]
+        }
+      }
+    },
+    {
+      "route_number": "26",
+      "from": "Ukkadam",
+      "to": "Veerapandi Pudur",
+      "operator": "TNSTC",
+      "bus_stops": ["Gandhipuram", "New Bus Stand", "Goundampalayam", "GN Mills", "Thudiyalur", "Pannimadai", "Chinna Thadagam"],
+      "daily_buses": 6,
+      "travel_time": "Not specified",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "04:30",
+          "last_bus": "20:20",
+          "departures": ["04:30", "06:20", "07:10", "09:20", "09:45", "11:45", "12:30", "14:45", "15:20", "17:20", "18:15", "20:20"]
+        },
+        "from_veerapandi_pudur": {
+          "first_bus": "06:00",
+          "last_bus": "21:30",
+          "departures": ["06:00", "08:00", "08:30", "10:45", "19:20", "21:30"]
+        }
+      }
+    },
+    {
+      "route_number": "26A",
+      "from": "Gandhipuram",
+      "to": "Anuvavi Subramaniya Temple",
+      "operator": "TNSTC",
+      "bus_stops": ["New Bus Stand", "Goundampalayam", "GN Mills", "Thudiyalur", "Pannimadai", "Thadagam", "Periya Thadagam"],
+      "daily_buses": 6,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "06:30",
+          "last_bus": "19:50",
+          "departures": ["06:30", "09:15", "12:00", "14:30", "17:00", "19:50"]
+        },
+        "from_anuvavi_subramaniya_temple": {
+          "first_bus": "07:30",
+          "last_bus": "21:00",
+          "departures": ["07:30", "10:15", "13:15", "15:45", "18:20", "21:00"]
+        }
+      }
+    },
+    {
+      "route_number": "27A",
+      "from": "Ukkadam",
+      "to": "Idikarai",
+      "operator": "TNSTC",
+      "bus_stops": ["Gandhipuram", "New Bus Stand", "Goundampalayam", "GN Mills", "Thudiyalur", "Athipalayam"],
+      "daily_buses": 8,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "04:00",
+          "last_bus": "20:00",
+          "departures": ["04:00", "06:30", "09:00", "11:20", "13:50", "15:50", "18:00", "20:00"]
+        },
+        "from_idikarai": {
+          "first_bus": "05:30",
+          "last_bus": "21:15",
+          "departures": ["05:30", "07:45", "10:00", "12:20", "14:40", "16:45", "19:00", "21:15"]
+        }
+      }
+    },
+    {
+      "route_number": "30",
+      "from": "Ukkadam",
+      "to": "Kannampalayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Railway Station", "Government Hospital", "Sungam", "Ramanathapuram", "Singanallur", "Ondipudur", "Pappampatti Pirivu", "Pallapalayam"],
+      "daily_buses": "Several",
+      "travel_time": "00:50 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "06:30",
+          "last_bus": "21:50",
+          "departures": ["06:30", "07:30", "08:20", "09:20", "10:30", "11:30", "12:40", "13:30", "14:30", "15:30", "16:20", "17:30", "18:30", "19:30", "21:20", "21:50"]
+        },
+        "from_kannampalayam": {
+          "first_bus": "05:30",
+          "last_bus": "20:30",
+          "departures": ["05:30", "06:30", "07:30", "08:30", "09:30", "10:30", "11:40", "12:30", "13:30", "14:30", "15:30", "16:30", "17:30", "18:30", "20:30"]
+        }
+      }
+    },
+    {
+      "route_number": "30D",
+      "from": "Gandhipuram",
+      "to": "Somanur",
+      "operator": "TNSTC",
+      "bus_stops": ["Lakshmi Mills", "Peelamedu", "Hope College", "ESI", "Singanallur", "Ondipudur", "Sulur", "Mathappur"],
+      "daily_buses": 3,
+      "travel_time": "01:00 hrs",
+      "timings": {
+        "from_gandhipuram": {
+          "first_bus": "10:15",
+          "last_bus": "17:15",
+          "departures": ["10:15", "13:45", "17:15"]
+        },
+        "from_somanur": {
+          "first_bus": "08:30",
+          "last_bus": "15:45",
+          "departures": ["08:30", "12:00", "15:45"]
+        }
+      }
+    },
+    {
+      "route_number": "30E",
+      "from": "Ukkadam",
+      "to": "Selakarachal",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Railway Station", "Government Hospital", "Sungam", "Ramanathapuram", "Singanallur", "Ondipudur", "Pappampatti Pirivu", "Sulur", "Kalangal", "Appanaickenpatti"],
+      "daily_buses": 11,
+      "travel_time": "01:20 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "06:15",
+          "last_bus": "22:00",
+          "departures": ["06:15", "06:40", "08:45", "10:00", "11:30", "12:45", "14:00", "16:45", "18:40", "19:45", "22:00"]
+        },
+        "from_selakarachal": {
+          "first_bus": "05:15",
+          "last_bus": "21:30",
+          "departures": ["05:15", "07:30", "08:40", "10:00", "11:30", "12:45", "14:00", "15:15", "17:15", "18:15", "20:00"]
+        }
+      }
+    },
+    {
+      "route_number": "30F",
+      "from": "Ukkadam",
+      "to": "Somanur",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Government Hospital", "Ramanathapuram", "Singanallur", "Ondipudur", "Sulur", "Sulur Aero", "Karanampettai"],
+      "daily_buses": 5,
+      "travel_time": "01:30 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "06:45",
+          "last_bus": "19:15",
+          "departures": ["06:45", "10:00", "12:45", "16:15", "19:15"]
+        },
+        "from_somanur": {
+          "first_bus": "05:15",
+          "last_bus": "17:45",
+          "departures": ["05:15", "08:15", "11:30", "14:20", "17:45"]
+        }
+      }
+    },
+    {
+      "route_number": "30G",
+      "from": "Ukkadam",
+      "to": "Somanur",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Government Hospital", "Ramanathapuram", "Singanallur", "Ondipudur", "Sulur", "Sulur Aero", "Sengathurai"],
+      "daily_buses": 2,
+      "travel_time": "01:40 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "10:00",
+          "last_bus": "13:30",
+          "departures": ["10:00", "13:30"]
+        },
+        "from_somanur": {
+          "first_bus": "11:45",
+          "last_bus": "15:00",
+          "departures": ["11:45", "15:00"]
+        }
+      }
+    },
+    {
+      "route_number": "30H",
+      "from": "Ukkadam",
+      "to": "Unjapalayam",
+      "operator": "TNSTC",
+      "bus_stops": ["Town Hall", "Government Hospital", "Ramanathapuram", "Singanallur", "Ondipudur", "Sulur", "Sulur Aero", "Sengathurai"],
+      "daily_buses": 2,
+      "travel_time": "01:30 hrs",
+      "timings": {
+        "from_ukkadam": {
+          "first_bus": "06:20",
+          "last_bus": "16:45",
+          "departures": ["06:20", "16:45"]
+        },
+        "from_unjapalayam": {
+          "first_bus": "08:15",
+          "last_bus": "18:30",
+          "departures": ["08:15", "18:30"]
+        }
+      }
+    }
+    ] 
+  }
