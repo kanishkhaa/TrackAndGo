@@ -41,11 +41,13 @@ const HomeScreenDriver = ({ navigation, route }) => {
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [estimatedArrival, setEstimatedArrival] = useState('10 minutes');
   const [destinationCoords, setDestinationCoords] = useState(null);
+  const [movementStatus, setMovementStatus] = useState('Stationary');
+  const [locationHistory, setLocationHistory] = useState([]);
 
   const mapRef = useRef(null);
   const locationSubscription = useRef(null);
   const animationRef = useRef(null);
-  const driverId = route?.params?.userId || 'driver123'; // Fallback for testing
+  const driverId = route?.params?.userId || 'driver123';
 
   const fetchCoordinates = async (location) => {
     try {
@@ -119,8 +121,11 @@ const HomeScreenDriver = ({ navigation, route }) => {
             type: 'user',
           },
         ]);
+        setLocationHistory([{
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        }]);
 
-        // Use Geoapify for reverse geocoding
         const address = await fetchAddressFromGeoapify(
           location.coords.latitude,
           location.coords.longitude
@@ -148,8 +153,35 @@ const HomeScreenDriver = ({ navigation, route }) => {
     };
   }, []);
 
+  const checkLocationServices = async () => {
+    const isEnabled = await Location.hasServicesEnabledAsync();
+    if (!isEnabled) {
+      Alert.alert(
+        'Location Services Disabled',
+        'Please enable location services on your device to share your location.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const requestLocationPermission = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'Location permission is required to share your location.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
   const saveTripDetails = async () => {
     try {
+      const normalizedBusDetails = `BUS_${trip.busDetails.trim().toUpperCase()}`; // Normalize
       const response = await fetch(`${API_URL}/api/trips`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,13 +190,15 @@ const HomeScreenDriver = ({ navigation, route }) => {
           from: trip.from,
           to: trip.to,
           startTime: trip.startTime,
-          busDetails: trip.busDetails,
+          busDetails: normalizedBusDetails,
         }),
       });
       const data = await response.json();
       if (!data.success) {
         throw new Error(data.message || 'Failed to save trip details');
       }
+      // Update trip state with normalized busDetails
+      setTrip((prev) => ({ ...prev, busDetails: normalizedBusDetails }));
       return data.tripId;
     } catch (error) {
       console.error('Error saving trip details:', error);
@@ -175,12 +209,13 @@ const HomeScreenDriver = ({ navigation, route }) => {
 
   const sendLocationUpdate = async (latitude, longitude) => {
     try {
+      console.log(`Sending location for busDetails: ${trip.busDetails}`);
       const response = await fetch(`${API_URL}/api/driver-locations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           driverId,
-          busDetails: trip.busDetails,
+          busDetails: trip.busDetails, // Use normalized busDetails from state
           latitude,
           longitude,
         }),
@@ -191,10 +226,17 @@ const HomeScreenDriver = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Error sending location update:', error);
+      // Optionally show an alert for persistent errors
     }
   };
 
   const startLocationTracking = async () => {
+    const servicesEnabled = await checkLocationServices();
+    if (!servicesEnabled) return;
+
+    const permissionGranted = await requestLocationPermission();
+    if (!permissionGranted) return;
+
     try {
       locationSubscription.current = await Location.watchPositionAsync(
         {
@@ -203,13 +245,15 @@ const HomeScreenDriver = ({ navigation, route }) => {
           distanceInterval: 10,
         },
         (location) => {
-          const { latitude, longitude } = location.coords;
+          const { latitude, longitude, speed } = location.coords;
           const newLocation = {
             latitude,
             longitude,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           };
+
+          setMovementStatus(speed > 0.5 ? 'Moving' : 'Stationary');
 
           setCurrentLocation(newLocation);
           setMapMarkers((prevMarkers) => {
@@ -219,9 +263,15 @@ const HomeScreenDriver = ({ navigation, route }) => {
               updatedMarkers[userMarkerIndex] = {
                 ...updatedMarkers[userMarkerIndex],
                 coordinate: { latitude, longitude },
+                title: `Bus ${trip.busDetails} (${movementStatus})`,
               };
             }
             return updatedMarkers;
+          });
+
+          setLocationHistory((prev) => {
+            const newHistory = [...prev, { latitude, longitude }];
+            return newHistory.slice(-50);
           });
 
           sendLocationUpdate(latitude, longitude);
@@ -248,6 +298,7 @@ const HomeScreenDriver = ({ navigation, route }) => {
       locationSubscription.current = null;
     }
     setIsTracking(false);
+    setMovementStatus('Stationary');
   };
 
   const handleToggleTracking = () => {
@@ -290,7 +341,7 @@ const HomeScreenDriver = ({ navigation, route }) => {
             latitude: currentLocation.latitude,
             longitude: currentLocation.longitude,
           },
-          title: trip.from || 'Start',
+          title: `Bus ${trip.busDetails} (${movementStatus})`,
           type: 'user',
         },
         {
@@ -299,6 +350,10 @@ const HomeScreenDriver = ({ navigation, route }) => {
           type: 'end',
         },
       ]);
+      setLocationHistory([{
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      }]);
     }
 
     setShowMap(true);
@@ -308,6 +363,8 @@ const HomeScreenDriver = ({ navigation, route }) => {
   const handleBackToForm = () => {
     stopLocationTracking();
     setShowMap(false);
+    setLocationHistory([]);
+    setMapMarkers([]);
   };
 
   const toggleSidebar = () => {
@@ -420,14 +477,22 @@ const HomeScreenDriver = ({ navigation, route }) => {
               )}
             </Marker>
           ))}
+          {locationHistory.length > 1 && (
+            <Polyline
+              coordinates={locationHistory}
+              strokeColor="#3B82F6"
+              strokeWidth={4}
+            />
+          )}
           {destinationCoords && (
             <Polyline
               coordinates={[
                 { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
                 destinationCoords,
               ]}
-              strokeColor="#3B82F6"
+              strokeColor="#EF4444"
               strokeWidth={4}
+              lineDashPattern={[10, 10]}
             />
           )}
         </MapView>
@@ -505,6 +570,10 @@ const HomeScreenDriver = ({ navigation, route }) => {
               <Text style={styles.tripInfoText}>Bus: {trip.busDetails}</Text>
             </View>
           )}
+          <View style={styles.tripInfoRow}>
+            <MaterialIcons name="directions" size={20} color="#10B981" />
+            <Text style={styles.tripInfoText}>Status: {movementStatus}</Text>
+          </View>
           <View style={styles.tripInfoRow}>
             <MaterialIcons name="schedule" size={20} color="#10B981" />
             <Text style={styles.tripInfoText}>ETA: {estimatedArrival}</Text>
@@ -662,7 +731,7 @@ const HomeScreenDriver = ({ navigation, route }) => {
             <MaterialIcons name="directions-bus" size={24} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Bus Details (Route/Number)"
+              placeholder="Bus Details (e.g., 1A, 42)"
               placeholderTextColor="#9CA3AF"
               value={trip.busDetails}
               onChangeText={(text) => setTrip({ ...trip, busDetails: text })}
@@ -738,39 +807,39 @@ const styles = StyleSheet.create({
     height: 6,
     width: '100%',
     backgroundColor: '#E5E7EB',
-    borderRadius: 4,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   loadingProgressBar: {
+    width: '60%',
     height: '100%',
-    width: '75%',
     backgroundColor: '#1976d2',
-    borderRadius: 4,
   },
   loadingFooter: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 20,
     alignItems: 'center',
   },
   loadingFooterText: {
-    color: '#6B7280',
     fontSize: 14,
+    color: '#6B7280',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    backgroundColor: '#fff',
+    elevation: 2,
+    zIndex: 10,
   },
   headerLeftSection: {
-    width: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuButton: {
+    padding: 5,
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -782,238 +851,201 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  menuButton: {
-    padding: 4,
+    color: '#333',
   },
   notificationButton: {
+    padding: 5,
     position: 'relative',
-    padding: 4,
-    width: 32,
   },
   notificationBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#EF4444',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: 0,
+    right: 0,
+    backgroundColor: '#F44336',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
+    zIndex: 11,
   },
   notificationBadgeText: {
-    color: '#FFFFFF',
+    color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 8,
-    textAlign: 'center',
-    marginTop: 24,
+    marginBottom: 10,
   },
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   formContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
     elevation: 3,
     marginBottom: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    height: 56,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    marginBottom: 15,
+    paddingHorizontal: 10,
+    backgroundColor: '#F9FAFB',
   },
   inputIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   input: {
     flex: 1,
+    height: 45,
     fontSize: 16,
     color: '#1F2937',
-    height: '100%',
   },
   currentLocationBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  currentLocationText: {
-    color: '#3B82F6',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  startButton: {
     backgroundColor: '#3B82F6',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  currentLocationText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  startButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    backgroundColor: '#1976d2',
+    padding: 15,
+    borderRadius: 8,
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginRight: 8,
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginRight: 10,
   },
   fullScreenContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  fullScreenMap: {
-    ...StyleSheet.absoluteFillObject,
   },
   mapHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 15,
     paddingVertical: 12,
-    backgroundColor: 'rgba(31, 41, 55, 0.8)',
+    backgroundColor: '#1976d2',
+    elevation: 2,
+    zIndex: 10,
   },
-  mapHeaderLeftSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  menuButtonMap: {
+    padding: 5,
   },
   mapHeaderTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  menuButtonMap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   notificationButtonMap: {
+    padding: 5,
     position: 'relative',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  fullScreenMap: {
+    flex: 1,
   },
   tripInfoCard: {
     position: 'absolute',
-    bottom: 24,
-    left: 16,
-    right: 16,
+    bottom: 20,
+    left: 20,
+    right: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    borderRadius: 12,
+    padding: 15,
     elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   tripInfoTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   tripInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   tripInfoText: {
     fontSize: 14,
     color: '#4B5563',
-    flex: 1,
-    marginLeft: 8,
+    marginLeft: 10,
   },
   trackingButton: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 12,
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 8,
+    marginTop: 10,
   },
   trackingActiveButton: {
     backgroundColor: '#EF4444',
   },
   trackingInactiveButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#1976d2',
   },
   trackingButtonText: {
     color: '#FFFFFF',
+    fontWeight: 'bold',
     fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
+    marginRight: 10,
   },
   backButton: {
-    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    padding: 15,
+    borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 12,
-    backgroundColor: '#6B7280',
+    marginTop: 10,
   },
   backButtonText: {
-    color: '#FFFFFF',
+    color: '#1F2937',
+    fontWeight: 'bold',
     fontSize: 16,
-    fontWeight: '600',
   },
   notificationsPanel: {
     position: 'absolute',
-    top: 60,
-    right: 16,
-    width: 300,
+    top: 80,
+    right: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    borderRadius: 8,
+    padding: 15,
     elevation: 5,
-    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    width: width * 0.8,
+    maxHeight: height * 0.4,
   },
   notificationsPanelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 10,
   },
   notificationsPanelTitle: {
     fontSize: 16,
@@ -1023,10 +1055,9 @@ const styles = StyleSheet.create({
   notificationItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5E7EB',
   },
   notificationItemContent: {
     flexDirection: 'row',
@@ -1035,29 +1066,26 @@ const styles = StyleSheet.create({
   },
   notificationText: {
     fontSize: 14,
-    color: '#4B5563',
-    flex: 1,
-    marginLeft: 8,
+    color: '#1F2937',
+    marginLeft: 10,
   },
   notificationReadText: {
-    opacity: 0.6,
+    color: '#9CA3AF',
   },
   markAllReadButton: {
-    alignSelf: 'flex-end',
-    marginTop: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 10,
   },
   markAllReadText: {
-    fontSize: 14,
-    color: '#3B82F6',
-    fontWeight: '500',
+    color: '#1976d2',
+    fontWeight: 'bold',
   },
   noNotificationsText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#6B7280',
     textAlign: 'center',
-    paddingVertical: 12,
+    padding: 10,
   },
   driverMarker: {
     backgroundColor: '#1976d2',

@@ -11,6 +11,7 @@ import {
   ScrollView,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -36,7 +37,9 @@ const HomeScreen = () => {
   const [currentLocation, setCurrentLocation] = useState(null);
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
+  const [busSearch, setBusSearch] = useState('');
   const [searchMode, setSearchMode] = useState(false);
+  const [busSearchMode, setBusSearchMode] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('home');
   const [mapMarkers, setMapMarkers] = useState([]);
@@ -69,7 +72,11 @@ const HomeScreen = () => {
     },
   ]);
   const [driverLocation, setDriverLocation] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [showBusStops, setShowBusStops] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const locationUpdateInterval = useRef(null);
+  const mapRef = useRef(null);
 
   const slideAnim = useState(new Animated.Value(100))[0];
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -88,25 +95,33 @@ const HomeScreen = () => {
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
-      const newLocation = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
+      try {
+        const location = await Location.getCurrentPositionAsync({});
+        const newLocation = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
 
-      setCurrentLocation(newLocation);
-      setMapMarkers([
-        {
-          coordinate: {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+        setCurrentLocation(newLocation);
+        setMapMarkers([
+          {
+            coordinate: {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            },
+            title: 'You are here',
+            type: 'user',
           },
-          title: 'You are here',
-          type: 'user',
-        },
-      ]);
+        ]);
+
+        if (mapRef.current) {
+          mapRef.current.animateToRegion(newLocation, 1000);
+        }
+      } catch (error) {
+        console.error('Error getting location:', error);
+      }
     })();
   }, []);
 
@@ -154,6 +169,11 @@ const HomeScreen = () => {
     navigation.navigate('Onboarding');
   };
 
+  const normalizeBusDetails = (busDetails) => {
+    const cleaned = busDetails.replace(/^BUS_+/i, '').trim().toUpperCase();
+    return `BUS_${cleaned}`;
+  };
+
   const fetchCoordinates = async (stopName) => {
     try {
       const query = encodeURIComponent(`${stopName}, Coimbatore, India`);
@@ -177,28 +197,58 @@ const HomeScreen = () => {
 
   const fetchDriverLocation = async (busDetails) => {
     try {
-      const response = await fetch(`${API_URL}/api/driver-locations/${encodeURIComponent(busDetails)}`);
+      setLocationLoading(true);
+      const normalizedBusDetails = normalizeBusDetails(busDetails);
+      console.log(`Fetching location for busDetails: ${normalizedBusDetails}`);
+      const response = await fetch(`${API_URL}/api/driver-locations/${encodeURIComponent(normalizedBusDetails)}`);
+      console.log(`HTTP Status: ${response.status}`);
       const data = await response.json();
-      if (data.latitude && data.longitude) {
+      console.log('Backend response:', data);
+
+      if (response.ok && data.latitude && data.longitude) {
         const newLocation = {
           latitude: data.latitude,
           longitude: data.longitude,
         };
         setDriverLocation(newLocation);
-        setMapMarkers((prevMarkers) => [
-          ...prevMarkers.filter((marker) => marker.type !== 'driver'),
-          {
-            coordinate: newLocation,
-            title: `Bus ${busDetails} Location`,
-            type: 'driver',
-          },
-        ]);
+        setLastUpdated(new Date(data.timestamp).toLocaleTimeString());
+        setMapMarkers((prevMarkers) => {
+          const updatedMarkers = [
+            ...prevMarkers.filter((marker) => marker.type !== 'driver'),
+            {
+              coordinate: newLocation,
+              title: `Bus ${normalizedBusDetails} Location`,
+              type: 'driver',
+            },
+          ];
+          console.log('Updated markers:', updatedMarkers);
+          return updatedMarkers;
+        });
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: newLocation.latitude,
+            longitude: newLocation.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 1000);
+        }
+        return newLocation;
       } else {
+        console.warn(`No location found for busDetails: ${normalizedBusDetails}`, {
+          status: response.status,
+          data,
+        });
         setDriverLocation(null);
+        setLastUpdated(null);
+        return null;
       }
     } catch (error) {
       console.error('Error fetching driver location:', error);
       setDriverLocation(null);
+      setLastUpdated(null);
+      return null;
+    } finally {
+      setLocationLoading(false);
     }
   };
 
@@ -230,7 +280,6 @@ const HomeScreen = () => {
               });
             }
           }
-          // Fetch driver location for each route's busDetails
           if (route.busDetails) {
             await fetchDriverLocation(route.busDetails);
           }
@@ -261,6 +310,7 @@ const HomeScreen = () => {
         }
         setRoutes([]);
         setDriverLocation(null);
+        setLastUpdated(null);
       }
     } catch (error) {
       console.error('Error fetching routes:', error);
@@ -269,9 +319,36 @@ const HomeScreen = () => {
       );
       setRoutes([]);
       setDriverLocation(null);
+      setLastUpdated(null);
     }
 
     setSearchMode(false);
+  };
+
+  const handleBusSearch = async () => {
+    const trimmedBusSearch = busSearch.trim();
+    if (!trimmedBusSearch) {
+      alert('Please enter a bus or route number');
+      return;
+    }
+
+    try {
+      const location = await fetchDriverLocation(trimmedBusSearch);
+      if (location) {
+        setSelectedRoute({ busDetails: normalizeBusDetails(trimmedBusSearch) });
+        setRouteDetailsVisible(true);
+      } else {
+        alert(`No live location found for bus/route ${trimmedBusSearch}. Please check the bus number and try again.`);
+        setMapMarkers(mapMarkers.filter((marker) => marker.type === 'user'));
+      }
+    } catch (error) {
+      console.error('Error fetching bus location:', error);
+      alert(`Failed to fetch bus location: ${error.message}. Ensure the backend is running at ${API_URL}.`);
+      setMapMarkers(mapMarkers.filter((marker) => marker.type === 'user'));
+    }
+
+    setBusSearchMode(false);
+    setBusSearch('');
   };
 
   const toggleSearchMode = () => {
@@ -280,9 +357,15 @@ const HomeScreen = () => {
     setToLocation('');
   };
 
+  const toggleBusSearchMode = () => {
+    setBusSearchMode(true);
+    setBusSearch('');
+  };
+
   const handleRouteSelect = (route) => {
     setSelectedRoute(route);
     setRouteDetailsVisible(true);
+    setShowBusStops(true);
     if (route.busDetails) {
       fetchDriverLocation(route.busDetails);
     }
@@ -291,6 +374,7 @@ const HomeScreen = () => {
   const closeRouteDetails = () => {
     setRouteDetailsVisible(false);
     setSelectedRoute(null);
+    setShowBusStops(true);
     if (locationUpdateInterval.current) {
       clearInterval(locationUpdateInterval.current);
     }
@@ -299,10 +383,27 @@ const HomeScreen = () => {
   const clearRoutes = () => {
     setRoutes([]);
     setDriverLocation(null);
+    setLastUpdated(null);
     setMapMarkers(mapMarkers.filter((marker) => marker.type === 'user'));
     if (locationUpdateInterval.current) {
       clearInterval(locationUpdateInterval.current);
     }
+  };
+
+  const zoomToBusLocation = () => {
+    if (driverLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: driverLocation.latitude,
+        longitude: driverLocation.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 1000);
+      closeRouteDetails();
+    }
+  };
+
+  const toggleBusStops = () => {
+    setShowBusStops(!showBusStops);
   };
 
   const renderBusStops = (stops) => {
@@ -328,6 +429,7 @@ const HomeScreen = () => {
                 ? styles.endStop
                 : {},
             ]}
+            accessibilityLabel={`Stop ${stop}`}
           >
             {stop}
           </Text>
@@ -342,7 +444,11 @@ const HomeScreen = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+        <TouchableOpacity
+          onPress={toggleSidebar}
+          style={styles.menuButton}
+          accessibilityLabel="Open sidebar"
+        >
           <Feather name="menu" size={24} color="#1976d2" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
@@ -352,6 +458,7 @@ const HomeScreen = () => {
         <TouchableOpacity
           style={styles.notificationButton}
           onPress={() => setNotificationsVisible(true)}
+          accessibilityLabel={`Notifications, ${notifications.length} new`}
         >
           <View style={styles.notificationBadge}>
             <Text style={styles.notificationBadgeText}>{notifications.length}</Text>
@@ -363,6 +470,7 @@ const HomeScreen = () => {
       <View style={styles.mapContainer}>
         {currentLocation && (
           <MapView
+            ref={mapRef}
             provider={PROVIDER_GOOGLE}
             style={styles.map}
             region={currentLocation}
@@ -370,7 +478,7 @@ const HomeScreen = () => {
           >
             {mapMarkers.map((marker, index) => (
               <Marker
-                key={index}
+                key={`${marker.type}-${index}`}
                 coordinate={marker.coordinate}
                 title={marker.title}
                 pinColor={
@@ -399,7 +507,7 @@ const HomeScreen = () => {
         onRequestClose={() => setSearchMode(false)}
       >
         <View style={styles.searchModal}>
-          <BlurView intensity={80} style={styles.searchContainer}>
+           <BlurView intensity={80} style={styles.searchContainer}>
             <View style={styles.searchHeader}>
               <Text style={styles.searchTitle}>Search by Route</Text>
               <TouchableOpacity onPress={() => setSearchMode(false)}>
@@ -431,6 +539,45 @@ const HomeScreen = () => {
               ]}
               onPress={handleSearch}
               disabled={!fromLocation.trim() || !toLocation.trim()}
+            >
+              <Text style={styles.searchButtonText}>Search</Text>
+            </TouchableOpacity>
+          </BlurView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={busSearchMode}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setBusSearchMode(false)}
+      >
+        <View style={styles.searchModal}>
+          <BlurView intensity={80} style={styles.searchContainer}>
+            <View style={styles.searchHeader}>
+              <Text style={styles.searchTitle}>Search by Bus/Route Number</Text>
+              <TouchableOpacity onPress={() => setBusSearchMode(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.inputContainer}>
+              <MaterialIcons name="directions-bus" size={20} color="#777" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter Bus Number (e.g., 1A, 42)"
+                placeholderTextColor="#777"
+                value={busSearch}
+                onChangeText={(text) => setBusSearch(text)}
+              />
+            </View>
+            <Text style={styles.inputHint}>Enter the bus number as shown on the bus (e.g., 1A, 42).</Text>
+            <TouchableOpacity
+              style={[
+                styles.searchButton,
+                !busSearch.trim() && styles.searchButtonDisabled,
+              ]}
+              onPress={handleBusSearch}
+              disabled={!busSearch.trim()}
             >
               <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
@@ -479,7 +626,11 @@ const HomeScreen = () => {
       >
         <SafeAreaView style={styles.fullscreenModal}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={closeRouteDetails} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={closeRouteDetails}
+              style={styles.backButton}
+              accessibilityLabel="Close route details"
+            >
               <Ionicons name="arrow-back" size={24} color="#1976d2" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Route Details</Text>
@@ -490,70 +641,104 @@ const HomeScreen = () => {
             <ScrollView style={styles.routeDetailsContent}>
               <View style={styles.routeHero}>
                 <View style={styles.routeNumberBadge}>
-                  <Text style={styles.routeNumberText}>{selectedRoute.route_number}</Text>
+                  <Text style={styles.routeNumberText}>
+                    {selectedRoute.route_number || selectedRoute.busDetails.replace('BUS_', '')}
+                  </Text>
                 </View>
                 <Text style={styles.routeTitle}>
-                  {selectedRoute.from} to {selectedRoute.to}
+                  {selectedRoute.from
+                    ? `${selectedRoute.from} to ${selectedRoute.to}`
+                    : `Bus ${selectedRoute.busDetails.replace('BUS_', '')}`}
                 </Text>
-              </View>
-
-              <View style={styles.routeDetailCard}>
-                <Text style={styles.sectionTitle}>Schedule Information</Text>
-                <View style={styles.scheduleTimes}>
-                  <View style={styles.scheduleTimeItem}>
-                    <MaterialIcons name="schedule" size={20} color="#1976d2" />
-                    <View>
-                      <Text style={styles.scheduleLabel}>First Bus</Text>
-                      <Text style={styles.scheduleValue}>
-                        {selectedRoute.timings.from_start.first_bus}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.scheduleTimeItem}>
-                    <MaterialIcons name="schedule" size={20} color="#F44336" />
-                    <View>
-                      <Text style={styles.scheduleLabel}>Last Bus</Text>
-                      <Text style={styles.scheduleValue}>
-                        {selectedRoute.timings.from_start.last_bus}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.routeInfoGrid}>
-                  <View style={styles.routeInfoItem}>
-                    <MaterialCommunityIcons name="bus-clock" size={20} color="#1976d2" />
-                    <View>
-                      <Text style={styles.scheduleLabel}>Travel Time</Text>
-                      <Text style={styles.scheduleValue}>{selectedRoute.travel_time}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.routeInfoItem}>
-                    <MaterialCommunityIcons name="bus-multiple" size={20} color="#1976d2" />
-                    <View>
-                      <Text style={styles.scheduleLabel}>Daily Buses</Text>
-                      <Text style={styles.scheduleValue}>{selectedRoute.daily_buses}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.routeDetailCard}>
-                <Text style={styles.sectionTitle}>Stop Points</Text>
-                <View style={styles.stopsContainer}>{renderBusStops(selectedRoute.bus_stops)}</View>
-              </View>
-
-              {driverLocation && (
-                <View style={styles.routeDetailCard}>
-                  <Text style={styles.sectionTitle}>Bus Location</Text>
-                  <Text style={styles.infoValue}>
-                    Current Location: Lat {driverLocation.latitude.toFixed(4)}, Lon{' '}
-                    {driverLocation.longitude.toFixed(4)}
+                {selectedRoute.travel_time && (
+                  <Text style={styles.routeSubtitle}>
+                    Estimated Travel Time: {selectedRoute.travel_time}
                   </Text>
+                )}
+                {selectedRoute.bus_stops && (
+                  <Text style={styles.routeSubtitle}>
+                    {selectedRoute.bus_stops.length} Stops
+                  </Text>
+                )}
+              </View>
+
+              {selectedRoute.bus_stops && (
+                <View style={styles.routeDetailCard}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Stop Points</Text>
+                    <TouchableOpacity
+                      onPress={toggleBusStops}
+                      style={styles.toggleButton}
+                      accessibilityLabel={showBusStops ? 'Hide stops' : 'Show stops'}
+                    >
+                      <Ionicons
+                        name={showBusStops ? 'chevron-up' : 'chevron-down'}
+                        size={20}
+                        color="#1976d2"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  {showBusStops && (
+                    <View style={styles.stopsContainer}>
+                      {renderBusStops(selectedRoute.bus_stops)}
+                    </View>
+                  )}
                 </View>
               )}
 
-              <TouchableOpacity style={styles.trackBusButton} onPress={closeRouteDetails}>
+              <View style={styles.routeDetailCard}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Bus Location</Text>
+                  {driverLocation && (
+                    <TouchableOpacity
+                      onPress={() => fetchDriverLocation(selectedRoute.busDetails)}
+                      style={styles.refreshButton}
+                      accessibilityLabel="Refresh bus location"
+                    >
+                      <Ionicons name="refresh" size={20} color="#1976d2" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {locationLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#1976d2" />
+                    <Text style={styles.loadingText}>Fetching location...</Text>
+                  </View>
+                ) : driverLocation ? (
+                  <View>
+                    <Text style={styles.infoValue}>
+                      Current Location: Lat {driverLocation.latitude.toFixed(4)}, Lon{' '}
+                      {driverLocation.longitude.toFixed(4)}
+                    </Text>
+                    <Text style={styles.infoValue}>
+                      Bus: {selectedRoute.busDetails.replace('BUS_', '')}
+                    </Text>
+                    {lastUpdated && (
+                      <Text style={styles.lastUpdatedText}>
+                        Last Updated: {lastUpdated}
+                      </Text>
+                    )}
+                    <TouchableOpacity
+                      style={styles.zoomButton}
+                      onPress={zoomToBusLocation}
+                      accessibilityLabel="Zoom to bus location"
+                    >
+                      <MaterialIcons name="zoom-in-map" size={18} color="#fff" />
+                      <Text style={styles.zoomButtonText}>View on Map</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.infoValue}>
+                    No live location available for this bus.
+                  </Text>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.trackBusButton}
+                onPress={closeRouteDetails}
+                accessibilityLabel="Track this bus"
+              >
                 <MaterialIcons name="my-location" size={20} color="#fff" />
                 <Text style={styles.trackBusText}>Track This Bus</Text>
               </TouchableOpacity>
@@ -562,11 +747,23 @@ const HomeScreen = () => {
         </SafeAreaView>
       </Modal>
 
-      {!searchMode && (
+      {!searchMode && !busSearchMode && (
         <View style={styles.searchOptions}>
-          <TouchableOpacity style={styles.searchOptionButton} onPress={toggleSearchMode}>
+          <TouchableOpacity
+            style={styles.searchOptionButton}
+            onPress={toggleSearchMode}
+            accessibilityLabel="Search by route"
+          >
             <MaterialIcons name="directions" size={20} color="#fff" />
             <Text style={styles.searchOptionText}>Search Route</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.searchOptionButton}
+            onPress={toggleBusSearchMode}
+            accessibilityLabel="Search by bus number"
+          >
+            <MaterialIcons name="directions-bus" size={20} color="#fff" />
+            <Text style={styles.searchOptionText}>Search Bus</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -712,7 +909,7 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   searchOptionButton: {
     flexDirection: 'row',
@@ -722,6 +919,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 8,
     elevation: 4,
+    flex: 0.48,
   },
   searchOptionText: {
     color: '#fff',
@@ -769,6 +967,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 45,
     fontSize: 16,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+    marginLeft: 10,
   },
   searchButton: {
     backgroundColor: '#1976d2',
@@ -879,14 +1083,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 15,
     elevation: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#333',
   },
   backButton: {
-    padding: 5,
+    padding: 8,
   },
   routeDetailsContent: {
     flex: 1,
@@ -896,77 +1102,81 @@ const styles = StyleSheet.create({
     backgroundColor: '#1976d2',
     padding: 20,
     alignItems: 'center',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   routeNumberBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   routeNumberText: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1976d2',
   },
   routeTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  routeSubtitle: {
+    fontSize: 14,
+    color: '#e3f2fd',
     textAlign: 'center',
   },
   routeDetailCard: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    margin: 10,
-    elevation: 2,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  scheduleTimes: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 15,
-  },
-  scheduleTimeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  scheduleLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 8,
-  },
-  scheduleValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
     color: '#333',
-    marginLeft: 8,
   },
-  routeInfoGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 15,
+  toggleButton: {
+    padding: 8,
   },
-  routeInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  refreshButton: {
+    padding: 8,
   },
   infoValue: {
     fontSize: 14,
     color: '#333',
+    marginBottom: 8,
+  },
+  lastUpdatedText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
   },
   stopsContainer: {
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   routeStopItem: {
     flexDirection: 'row',
@@ -1003,11 +1213,11 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   startStop: {
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#1976d2',
   },
   endStop: {
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#F44336',
   },
   endpointLabel: {
@@ -1020,14 +1230,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 8,
-    margin: 10,
+    borderRadius: 12,
+    margin: 12,
     marginTop: 20,
+    elevation: 3,
   },
   trackBusText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 16,
+    marginLeft: 8,
+  },
+  zoomButton: {
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  zoomButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#333',
     marginLeft: 8,
   },
   co2Container: {
