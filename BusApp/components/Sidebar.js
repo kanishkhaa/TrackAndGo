@@ -140,13 +140,10 @@ const Sidebar = ({ visible, activeMenuItem, onClose, onMenuItemPress, onSignOut 
       case 'home':
         navigation.navigate('HomeScreen');
         break;
-      case 'subscription':
-        navigation.navigate('SubscriptionScreen');
-        break;
       case 'journeyplanner':
         navigation.navigate('JourneyPlannerScreen');
         break;
-      case 'routes':
+      case 'subscription':
         navigation.navigate('RoutesScreen');
         break;
       case 'lost':

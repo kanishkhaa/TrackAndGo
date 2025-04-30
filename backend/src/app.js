@@ -13,7 +13,7 @@ const port = process.env.PORT || 3000;
 const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/bus_data';
 
 // Middleware
-app.use(cors()); // Allow cross-origin requests
+app.use(cors());
 app.use(express.json());
 
 // Root route
@@ -22,16 +22,13 @@ app.get('/', (req, res) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(mongoURI, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true 
-})
+mongoose.connect(mongoURI, {})
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Routes
-app.use('/api/bus-routes', busRoutes); // Existing bus routes
-app.use('/api', apiRoutes); // New routes for trips and locations
+app.use('/api/bus-routes', busRoutes);
+app.use('/api', apiRoutes);
 
 // Start the server
 app.listen(port, '192.168.11.179', () => {

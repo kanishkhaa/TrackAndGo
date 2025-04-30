@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
 import {
   FontAwesome5,
   MaterialIcons,
@@ -75,8 +75,19 @@ const HomeScreen = () => {
   const [locationLoading, setLocationLoading] = useState(false);
   const [showBusStops, setShowBusStops] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [lastDriverBearing, setLastDriverBearing] = useState(0);
   const locationUpdateInterval = useRef(null);
   const mapRef = useRef(null);
+
+  // Animated region for smooth marker movement
+  const animatedDriverCoordinate = useRef(
+    new AnimatedRegion({
+      latitude: 0,
+      longitude: 0,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    })
+  ).current;
 
   const slideAnim = useState(new Animated.Value(100))[0];
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -144,9 +155,10 @@ const HomeScreen = () => {
 
   useEffect(() => {
     if (selectedRoute && selectedRoute.busDetails) {
+      fetchDriverLocation(selectedRoute.busDetails);
       locationUpdateInterval.current = setInterval(() => {
         fetchDriverLocation(selectedRoute.busDetails);
-      }, 10000); // Update every 10 seconds
+      }, 5000);
     }
     return () => {
       if (locationUpdateInterval.current) {
@@ -195,6 +207,21 @@ const HomeScreen = () => {
     }
   };
 
+  const calculateBearing = (prevLocation, newLocation) => {
+    if (!prevLocation) return 0;
+    const lat1 = (prevLocation.latitude * Math.PI) / 180;
+    const lon1 = (prevLocation.longitude * Math.PI) / 180;
+    const lat2 = (newLocation.latitude * Math.PI) / 180;
+    const lon2 = (newLocation.longitude * Math.PI) / 180;
+
+    const dLon = lon2 - lon1;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    let bearing = Math.atan2(y, x) * (180 / Math.PI);
+    bearing = (bearing + 360) % 360;
+    return bearing;
+  };
+
   const fetchDriverLocation = async (busDetails) => {
     try {
       setLocationLoading(true);
@@ -210,8 +237,22 @@ const HomeScreen = () => {
           latitude: data.latitude,
           longitude: data.longitude,
         };
+
+        if (driverLocation) {
+          const bearing = calculateBearing(driverLocation, newLocation);
+          setLastDriverBearing(bearing);
+        }
+
         setDriverLocation(newLocation);
         setLastUpdated(new Date(data.timestamp).toLocaleTimeString());
+
+        animatedDriverCoordinate.timing({
+          latitude: newLocation.latitude,
+          longitude: newLocation.longitude,
+          duration: 1000,
+          useNativeDriver: false,
+        }).start();
+
         setMapMarkers((prevMarkers) => {
           const updatedMarkers = [
             ...prevMarkers.filter((marker) => marker.type !== 'driver'),
@@ -224,6 +265,7 @@ const HomeScreen = () => {
           console.log('Updated markers:', updatedMarkers);
           return updatedMarkers;
         });
+
         if (mapRef.current) {
           mapRef.current.animateToRegion({
             latitude: newLocation.latitude,
@@ -240,12 +282,14 @@ const HomeScreen = () => {
         });
         setDriverLocation(null);
         setLastUpdated(null);
+        setLastDriverBearing(0);
         return null;
       }
     } catch (error) {
       console.error('Error fetching driver location:', error);
       setDriverLocation(null);
       setLastUpdated(null);
+      setLastDriverBearing(0);
       return null;
     } finally {
       setLocationLoading(false);
@@ -311,6 +355,7 @@ const HomeScreen = () => {
         setRoutes([]);
         setDriverLocation(null);
         setLastUpdated(null);
+        setLastDriverBearing(0);
       }
     } catch (error) {
       console.error('Error fetching routes:', error);
@@ -320,6 +365,7 @@ const HomeScreen = () => {
       setRoutes([]);
       setDriverLocation(null);
       setLastUpdated(null);
+      setLastDriverBearing(0);
     }
 
     setSearchMode(false);
@@ -332,10 +378,18 @@ const HomeScreen = () => {
       return;
     }
 
+    const busNumberRegex = /^[A-Za-z0-9]+$/;
+    if (!busNumberRegex.test(trimmedBusSearch.replace(/^BUS_+/i, ''))) {
+      alert('Invalid bus number format. Use letters and numbers (e.g., 12C, 1A, BUS_12C).');
+      return;
+    }
+
     try {
-      const location = await fetchDriverLocation(trimmedBusSearch);
+      const normalizedBusSearch = normalizeBusDetails(trimmedBusSearch);
+      console.log(`Searching for bus: ${normalizedBusSearch}`);
+      const location = await fetchDriverLocation(normalizedBusSearch);
       if (location) {
-        setSelectedRoute({ busDetails: normalizeBusDetails(trimmedBusSearch) });
+        setSelectedRoute({ busDetails: normalizedBusSearch });
         setRouteDetailsVisible(true);
       } else {
         alert(`No live location found for bus/route ${trimmedBusSearch}. Please check the bus number and try again.`);
@@ -384,6 +438,7 @@ const HomeScreen = () => {
     setRoutes([]);
     setDriverLocation(null);
     setLastUpdated(null);
+    setLastDriverBearing(0);
     setMapMarkers(mapMarkers.filter((marker) => marker.type === 'user'));
     if (locationUpdateInterval.current) {
       clearInterval(locationUpdateInterval.current);
@@ -477,24 +532,32 @@ const HomeScreen = () => {
             showsUserLocation={true}
           >
             {mapMarkers.map((marker, index) => (
-              <Marker
-                key={`${marker.type}-${index}`}
-                coordinate={marker.coordinate}
-                title={marker.title}
-                pinColor={
-                  marker.type === 'user'
-                    ? '#1976d2'
-                    : marker.type === 'driver'
-                    ? '#10B981'
-                    : '#F44336'
-                }
-              >
-                {marker.type === 'driver' && (
+              marker.type === 'driver' ? (
+                <Marker.Animated
+                  key={`driver-${index}`}
+                  coordinate={animatedDriverCoordinate}
+                  title={marker.title}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  rotation={lastDriverBearing}
+                >
                   <View style={styles.driverMarker}>
                     <MaterialIcons name="directions-bus" size={24} color="#FFFFFF" />
                   </View>
-                )}
-              </Marker>
+                </Marker.Animated>
+              ) : (
+                <Marker
+                  key={`${marker.type}-${index}`}
+                  coordinate={marker.coordinate}
+                  title={marker.title}
+                  pinColor={
+                    marker.type === 'user'
+                      ? '#1976d2'
+                      : marker.type === 'bus_stop'
+                      ? '#F44336'
+                      : '#10B981'
+                  }
+                />
+              )
             ))}
           </MapView>
         )}
@@ -507,7 +570,7 @@ const HomeScreen = () => {
         onRequestClose={() => setSearchMode(false)}
       >
         <View style={styles.searchModal}>
-           <BlurView intensity={80} style={styles.searchContainer}>
+          <BlurView intensity={80} style={styles.searchContainer}>
             <View style={styles.searchHeader}>
               <Text style={styles.searchTitle}>Search by Route</Text>
               <TouchableOpacity onPress={() => setSearchMode(false)}>
@@ -564,13 +627,13 @@ const HomeScreen = () => {
               <MaterialIcons name="directions-bus" size={20} color="#777" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Enter Bus Number (e.g., 1A, 42)"
+                placeholder="Enter Bus Number (e.g., 12C, 1A)"
                 placeholderTextColor="#777"
                 value={busSearch}
                 onChangeText={(text) => setBusSearch(text)}
               />
             </View>
-            <Text style={styles.inputHint}>Enter the bus number as shown on the bus (e.g., 1A, 42).</Text>
+            <Text style={styles.inputHint}>Enter the bus number as shown on the bus (e.g., 12C, 1A).</Text>
             <TouchableOpacity
               style={[
                 styles.searchButton,
@@ -1335,6 +1398,8 @@ const styles = StyleSheet.create({
     padding: 8,
     borderWidth: 2,
     borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

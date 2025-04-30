@@ -6,7 +6,6 @@ import JourneyPlannerScreen from './screens/JourneyPlannerScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import RoleScreen from './screens/RoleScreen';
 import HomeScreen from './screens/HomeScreen';
-import SubscriptionScreen from './screens/SubscriptionScreen';
 import LostFoundScreen from './screens/LostFoundScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RoutesScreen from './screens/RoutesScreen';
@@ -24,7 +23,6 @@ export default function App() {
           <Stack.Screen name="RoleScreen" component={RoleScreen} />
           <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
           <Stack.Screen name="HomeScreen" component={HomeScreen} />
-          <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
           <Stack.Screen name="JourneyPlannerScreen" component={JourneyPlannerScreen} />
           <Stack.Screen name="LostFoundScreen" component={LostFoundScreen} />
           <Stack.Screen name="RoutesScreen" component={RoutesScreen} />

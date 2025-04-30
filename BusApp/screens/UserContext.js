@@ -4,6 +4,7 @@ export const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
   const [user, setUser] = useState({
+    userId: 'dummy_user_123',
     role: null,
     profileComplete: false,
     profileData: null,

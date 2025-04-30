@@ -31,7 +31,12 @@ router.post('/driver-locations', async (req, res) => {
 // GET /api/driver-locations/:busDetails
 router.get('/driver-locations/:busDetails', async (req, res) => {
   try {
-    const busDetails = `BUS_${req.params.busDetails.trim().toUpperCase()}`; 
+    // Normalize busDetails by ensuring a single BUS_ prefix
+    let busDetails = req.params.busDetails.trim().toUpperCase();
+    // Remove multiple BUS_ prefixes and add a single BUS_
+    busDetails = busDetails.replace(/^BUS_+/i, '');
+    busDetails = `BUS_${busDetails}`;
+    
     console.log(`Querying for busDetails: ${busDetails}`);
     const location = await BusLocation.findOne(
       { busDetails, type: 'location' },
