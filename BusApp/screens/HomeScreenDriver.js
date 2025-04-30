@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  FlatList,
 } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -22,10 +23,9 @@ const GEOAPIFY_API_KEY = '7b3757a8e0994af49ee07c57f01d616f';
 
 const HomeScreenDriver = ({ navigation, route }) => {
   const [trip, setTrip] = useState({
-    from: '',
-    to: '',
+    routeNumber: '',
+    crowdness: '',
     startTime: '',
-    busDetails: '',
   });
   const [showMap, setShowMap] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
@@ -34,40 +34,21 @@ const HomeScreenDriver = ({ navigation, route }) => {
   const [currentAddress, setCurrentAddress] = useState('');
   const [isTracking, setIsTracking] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: 'New route update available', read: false },
-    { id: 2, text: 'Passenger waiting at next stop', read: false },
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const [estimatedArrival, setEstimatedArrival] = useState('10 minutes');
+  const [estimatedArrival, setEstimatedArrival] = useState('');
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [movementStatus, setMovementStatus] = useState('Stationary');
   const [locationHistory, setLocationHistory] = useState([]);
+  const [routeSuggestions, setRouteSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState(null);
 
   const mapRef = useRef(null);
   const locationSubscription = useRef(null);
   const animationRef = useRef(null);
   const driverId = route?.params?.userId || 'driver123';
-
-  const fetchCoordinates = async (location) => {
-    try {
-      const query = encodeURIComponent(`${location}, Coimbatore, India`);
-      const url = `https://api.geoapify.com/v1/geocode/search?text=${query}&apiKey=${GEOAPIFY_API_KEY}&limit=1&format=json&lang=en&bias=proximity:77.7172,11.3410`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.results && data.results.length > 0) {
-        const result = data.results[0];
-        return {
-          latitude: result.lat,
-          longitude: result.lon,
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error(`Error fetching coordinates for ${location}:`, error);
-      return null;
-    }
-  };
+  const lastMovementUpdate = useRef(Date.now());
 
   const fetchAddressFromGeoapify = async (latitude, longitude) => {
     try {
@@ -76,69 +57,114 @@ const HomeScreenDriver = ({ navigation, route }) => {
       const data = await response.json();
       if (data.results && data.results.length > 0) {
         const result = data.results[0];
-        const formattedAddress = `${result.street || ''}, ${result.city || ''}, ${result.state || ''}`.trim();
-        return formattedAddress || 'Unknown Address';
+        return `${result.street || ''}, ${result.city || ''}, ${result.state || ''}`.trim() || 'Unknown Address';
       }
       return 'Unknown Address';
     } catch (error) {
-      console.error('Error fetching address from Geoapify:', error);
+      console.error('Error fetching address:', error);
       return 'Unknown Address';
     }
+  };
+
+  const fetchRouteSuggestions = async (query) => {
+    try {
+      const response = await fetch(`${API_URL}/api/bus-routes`);
+      const routes = await response.json();
+      const filteredRoutes = routes.filter((route) =>
+        route.route_number.toLowerCase().includes(query.toLowerCase())
+      );
+      setRouteSuggestions(filteredRoutes);
+      setShowSuggestions(query.length > 0);
+    } catch (error) {
+      console.error('Error fetching route suggestions:', error);
+      Alert.alert('Error', 'Failed to fetch route suggestions.');
+    }
+  };
+
+  const calculateETA = (current, destination) => {
+    if (!current || !destination) return 'Calculating...';
+    const distance = getDistance(current, destination); // in km
+    const speed = 30; // Assume average speed of 30 km/h
+    const timeHours = distance / speed;
+    const timeMinutes = Math.round(timeHours * 60);
+    return `${timeMinutes} min`;
+  };
+
+  const getDistance = (point1, point2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = ((point2.latitude - point1.latitude) * Math.PI) / 180;
+    const dLon = ((point2.longitude - point1.longitude) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((point1.latitude * Math.PI) / 180) *
+        Math.cos((point2.latitude * Math.PI) / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+  };
+
+  const fitMapToMarkers = (markers) => {
+    if (markers.length === 0 || !mapRef.current) return;
+
+    const coordinates = markers.map((marker) => marker.coordinate);
+    const minLat = Math.min(...coordinates.map((c) => c.latitude));
+    const maxLat = Math.max(...coordinates.map((c) => c.latitude));
+    const minLon = Math.min(...coordinates.map((c) => c.longitude));
+    const maxLon = Math.max(...coordinates.map((c) => c.longitude));
+
+    const padding = 0.01; // Add padding to the map view
+    const region = {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLon + maxLon) / 2,
+      latitudeDelta: (maxLat - minLat + padding) * 1.5,
+      longitudeDelta: (maxLon - minLon + padding) * 1.5,
+    };
+
+    mapRef.current.animateToRegion(region, 1000);
   };
 
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Denied',
-          'We need location permissions to show your current location on the map.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Permission Denied', 'Location permissions are required.', [{ text: 'OK' }]);
         setIsLoading(false);
         return;
       }
 
       try {
         const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
+          accuracy: Location.Accuracy.BestForNavigation,
         });
         const newLocation = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
         };
 
         setCurrentLocation(newLocation);
         setMapMarkers([
           {
+            id: 'user',
             coordinate: {
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
             },
-            title: 'Your current location',
+            title: `Bus ${trip.routeNumber || 'Unknown'}`,
             type: 'user',
           },
         ]);
-        setLocationHistory([{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        }]);
+        setLocationHistory([{ latitude: location.coords.latitude, longitude: location.coords.longitude }]);
 
         const address = await fetchAddressFromGeoapify(
           location.coords.latitude,
           location.coords.longitude
         );
         setCurrentAddress(address);
-        setTrip((prev) => ({ ...prev, from: address }));
       } catch (error) {
         console.error('Error getting location:', error);
-        Alert.alert(
-          'Location Error',
-          'Failed to get your current location. Please check your device settings.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Location Error', 'Failed to get your location.', [{ text: 'OK' }]);
       } finally {
         setTimeout(() => {
           setIsLoading(false);
@@ -156,11 +182,7 @@ const HomeScreenDriver = ({ navigation, route }) => {
   const checkLocationServices = async () => {
     const isEnabled = await Location.hasServicesEnabledAsync();
     if (!isEnabled) {
-      Alert.alert(
-        'Location Services Disabled',
-        'Please enable location services on your device to share your location.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Location Services Disabled', 'Please enable location services.', [{ text: 'OK' }]);
       return false;
     }
     return true;
@@ -169,11 +191,7 @@ const HomeScreenDriver = ({ navigation, route }) => {
   const requestLocationPermission = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission Denied',
-        'Location permission is required to share your location.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Permission Denied', 'Location permission is required.', [{ text: 'OK' }]);
       return false;
     }
     return true;
@@ -181,24 +199,21 @@ const HomeScreenDriver = ({ navigation, route }) => {
 
   const saveTripDetails = async () => {
     try {
-      const normalizedBusDetails = `BUS_${trip.busDetails.trim().toUpperCase()}`; // Normalize
       const response = await fetch(`${API_URL}/api/trips`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           driverId,
-          from: trip.from,
-          to: trip.to,
+          routeNumber: trip.routeNumber,
+          crowdness: trip.crowdness,
           startTime: trip.startTime,
-          busDetails: normalizedBusDetails,
+          busDetails: `BUS_${trip.routeNumber}`,
         }),
       });
       const data = await response.json();
       if (!data.success) {
         throw new Error(data.message || 'Failed to save trip details');
       }
-      // Update trip state with normalized busDetails
-      setTrip((prev) => ({ ...prev, busDetails: normalizedBusDetails }));
       return data.tripId;
     } catch (error) {
       console.error('Error saving trip details:', error);
@@ -209,13 +224,12 @@ const HomeScreenDriver = ({ navigation, route }) => {
 
   const sendLocationUpdate = async (latitude, longitude) => {
     try {
-      console.log(`Sending location for busDetails: ${trip.busDetails}`);
       const response = await fetch(`${API_URL}/api/driver-locations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           driverId,
-          busDetails: trip.busDetails, // Use normalized busDetails from state
+          busDetails: `BUS_${trip.routeNumber}`,
           latitude,
           longitude,
         }),
@@ -224,13 +238,13 @@ const HomeScreenDriver = ({ navigation, route }) => {
       if (!data.success) {
         throw new Error(data.message || 'Failed to send location update');
       }
+      console.log('Location update sent:', { latitude, longitude });
     } catch (error) {
       console.error('Error sending location update:', error);
-      // Optionally show an alert for persistent errors
     }
   };
 
-  const startLocationTracking = async () => {
+  const startLocationTracking = useCallback(async () => {
     const servicesEnabled = await checkLocationServices();
     if (!servicesEnabled) return;
 
@@ -240,66 +254,87 @@ const HomeScreenDriver = ({ navigation, route }) => {
     try {
       locationSubscription.current = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 10,
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 60000, // Update every 60 seconds
+          distanceInterval: 0, // No minimum distance required
         },
         (location) => {
           const { latitude, longitude, speed } = location.coords;
           const newLocation = {
             latitude,
             longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
           };
 
-          setMovementStatus(speed > 0.5 ? 'Moving' : 'Stationary');
+          // Update movement status (debounced every 5 seconds)
+          const now = Date.now();
+          if (now - lastMovementUpdate.current >= 5000) {
+            setMovementStatus(speed > 0.5 ? 'Moving' : 'Stationary');
+            lastMovementUpdate.current = now;
+          }
 
           setCurrentLocation(newLocation);
+          setLocationHistory((prev) => {
+            const newHistory = [...prev, { latitude, longitude }];
+            return newHistory.slice(-100); // Keep last 100 points
+          });
+
+          // Update user marker coordinates only
           setMapMarkers((prevMarkers) => {
             const updatedMarkers = [...prevMarkers];
-            const userMarkerIndex = updatedMarkers.findIndex((marker) => marker.type === 'user');
+            const userMarkerIndex = updatedMarkers.findIndex((marker) => marker.id === 'user');
             if (userMarkerIndex !== -1) {
               updatedMarkers[userMarkerIndex] = {
                 ...updatedMarkers[userMarkerIndex],
                 coordinate: { latitude, longitude },
-                title: `Bus ${trip.busDetails} (${movementStatus})`,
               };
             }
             return updatedMarkers;
           });
 
-          setLocationHistory((prev) => {
-            const newHistory = [...prev, { latitude, longitude }];
-            return newHistory.slice(-50);
-          });
-
           sendLocationUpdate(latitude, longitude);
 
-          if (mapRef.current) {
-            mapRef.current.animateToRegion(newLocation, 1000);
+          if (destinationCoords) {
+            const eta = calculateETA({ latitude, longitude }, destinationCoords);
+            setEstimatedArrival(eta);
           }
+
+          // Fit map to include all markers
+          fitMapToMarkers(mapMarkers);
         }
       );
       setIsTracking(true);
+      setNotifications((prev) => [
+        ...prev,
+        {
+          id: `tracking-started-${Date.now()}`,
+          text: `Location tracking started for Route ${trip.routeNumber}.`,
+          read: false,
+        },
+      ]);
     } catch (error) {
       console.error('Error starting location tracking:', error);
-      Alert.alert(
-        'Tracking Error',
-        'Failed to track your location. Please try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Tracking Error', 'Failed to track your location.', [{ text: 'OK' }]);
     }
-  };
+  }, [trip.routeNumber, destinationCoords, mapMarkers]);
 
-  const stopLocationTracking = () => {
+  const stopLocationTracking = useCallback(() => {
     if (locationSubscription.current) {
       locationSubscription.current.remove();
       locationSubscription.current = null;
     }
     setIsTracking(false);
     setMovementStatus('Stationary');
-  };
+    setNotifications((prev) => [
+      ...prev,
+      {
+        id: `tracking-stopped-${Date.now()}`,
+        text: `Location tracking stopped for Route ${trip.routeNumber}.`,
+        read: false,
+      },
+    ]);
+  }, [trip.routeNumber]);
 
   const handleToggleTracking = () => {
     if (isTracking) {
@@ -310,54 +345,141 @@ const HomeScreenDriver = ({ navigation, route }) => {
   };
 
   const handleStartTrip = async () => {
-    if (!trip.to || !trip.busDetails) {
-      Alert.alert(
-        'Incomplete Information',
-        'Please enter your destination and bus details before starting your trip.',
-        [{ text: 'OK' }]
-      );
+    if (!trip.routeNumber || !trip.crowdness || !trip.startTime) {
+      Alert.alert('Incomplete Information', 'Please enter route number, crowdness level, and start time.', [{ text: 'OK' }]);
       return;
     }
-
+  
+    // Validate startTime format (HH:MM)
+    if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(trip.startTime)) {
+      Alert.alert('Invalid Start Time', 'Please enter a valid start time in HH:MM format (e.g., 10:00).', [{ text: 'OK' }]);
+      return;
+    }
+  
     const tripId = await saveTripDetails();
     if (!tripId) return;
-
-    const coords = await fetchCoordinates(trip.to);
-    if (!coords) {
-      Alert.alert(
-        'Geocoding Error',
-        'Could not find coordinates for the destination. Please try a different address.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    setDestinationCoords(coords);
-
-    if (currentLocation) {
-      setMapMarkers([
-        {
-          coordinate: {
-            latitude: currentLocation.latitude,
-            longitude: currentLocation.longitude,
-          },
-          title: `Bus ${trip.busDetails} (${movementStatus})`,
-          type: 'user',
+  
+    try {
+      const response = await fetch(`${API_URL}/api/bus-routes`);
+      const routes = await response.json();
+      const selectedRoute = routes.find((r) => r.route_number === trip.routeNumber);
+      if (!selectedRoute) {
+        Alert.alert('Error', 'Route not found.');
+        return;
+      }
+  
+      setSelectedRoute(selectedRoute);
+  
+      // Get the first and last bus stops
+      const busStops = selectedRoute.bus_stops;
+      if (!busStops || busStops.length < 2) {
+        Alert.alert('Error', 'Invalid route: At least two bus stops are required.');
+        return;
+      }
+  
+      const startStop = busStops[0];
+      const endStop = busStops[busStops.length - 1];
+  
+      // Fetch coordinates for start and end stops if not available
+      let startCoords = startStop.coordinates?.latitude && startStop.coordinates?.longitude
+        ? { latitude: startStop.coordinates.latitude, longitude: startStop.coordinates.longitude }
+        : await fetchCoordinates(startStop.name);
+  
+      let endCoords = endStop.coordinates?.latitude && endStop.coordinates?.longitude
+        ? { latitude: endStop.coordinates.latitude, longitude: endStop.coordinates.longitude }
+        : await fetchCoordinates(endStop.name);
+  
+      // Fallback if coordinates could not be fetched
+      if (!startCoords) {
+        Alert.alert('Warning', `Could not fetch coordinates for ${startStop.name}. Using current location as fallback.`);
+        startCoords = {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+        };
+      }
+  
+      if (!endCoords) {
+        Alert.alert('Warning', `Could not fetch coordinates for ${endStop.name}. Using offset from start as fallback.`);
+        endCoords = {
+          latitude: startCoords.latitude + 0.01,
+          longitude: startCoords.longitude + 0.01,
+        };
+      }
+  
+      // Set destination coordinates for ETA calculation
+      setDestinationCoords(endCoords);
+  
+      // Create markers for all bus stops, including start and end
+      const stopMarkers = busStops
+        .map((stop, index) => {
+          let coords;
+          if (index === 0) {
+            coords = startCoords;
+          } else if (index === busStops.length - 1) {
+            coords = endCoords;
+          } else {
+            coords = stop.coordinates?.latitude && stop.coordinates?.longitude
+              ? { latitude: stop.coordinates.latitude, longitude: stop.coordinates.longitude }
+              : null;
+          }
+  
+          if (!coords) return null;
+  
+          return {
+            id: `stop-${index}`,
+            coordinate: coords,
+            title: stop.name,
+            type: index === 0 ? 'start' : index === busStops.length - 1 ? 'end' : 'stop',
+          };
+        })
+        .filter((marker) => marker !== null);
+  
+      // Include the driver's current location as a marker
+      const driverMarker = {
+        id: 'user',
+        coordinate: {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
         },
-        {
-          coordinate: coords,
-          title: trip.to || 'End',
-          type: 'end',
-        },
-      ]);
-      setLocationHistory([{
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-      }]);
+        title: `Bus ${trip.routeNumber}`,
+        type: 'user',
+      };
+  
+      // Update map markers
+      const allMarkers = [driverMarker, ...stopMarkers];
+      setMapMarkers(allMarkers);
+  
+      // Show the map and start tracking
+      setShowMap(true);
+      startLocationTracking();
+  
+      // Fit map to include all markers
+      setTimeout(() => {
+        fitMapToMarkers(allMarkers);
+      }, 500);
+    } catch (error) {
+      console.error('Error fetching route details:', error);
+      Alert.alert('Error', 'Failed to fetch route details.');
     }
+  };
 
-    setShowMap(true);
-    startLocationTracking();
+  const fetchCoordinates = async (location) => {
+    try {
+      const query = encodeURIComponent(`${location}, Coimbatore, India`);
+      const url = `https://api.geoapify.com/v1/geocode/search?text=${query}&apiKey=${GEOAPIFY_API_KEY}&limit=1&format=json`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.results && data.results.length > 0) {
+        return {
+          latitude: data.results[0].lat,
+          longitude: data.results[0].lon,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error fetching coordinates for ${location}:`, error);
+      return null;
+    }
   };
 
   const handleBackToForm = () => {
@@ -365,6 +487,9 @@ const HomeScreenDriver = ({ navigation, route }) => {
     setShowMap(false);
     setLocationHistory([]);
     setMapMarkers([]);
+    setDestinationCoords(null);
+    setEstimatedArrival('');
+    setSelectedRoute(null);
   };
 
   const toggleSidebar = () => {
@@ -372,29 +497,30 @@ const HomeScreenDriver = ({ navigation, route }) => {
   };
 
   const readAllNotifications = () => {
-    setNotifications(notifications.map((notification) => ({ ...notification, read: true })));
+    setNotifications(notifications.map((n) => ({ ...n, read: true })));
     setNotificationsVisible(false);
   };
 
   const dismissNotification = (id) => {
-    setNotifications(notifications.filter((notification) => notification.id !== id));
+    setNotifications(notifications.filter((n) => n.id !== id));
   };
 
-  const handleRouteOptimization = () => {
-    Alert.alert(
-      'Route Optimization',
-      'Optimizing your route based on current traffic conditions...',
-      [{ text: 'OK' }]
-    );
-    setTimeout(() => {
-      setEstimatedArrival('8 minutes');
-      Alert.alert(
-        'Route Optimized!',
-        'We’ve found a faster route to your destination.',
-        [{ text: 'Great!' }]
-      );
-    }, 1500);
+  const handleRouteNumberChange = (text) => {
+    setTrip({ ...trip, routeNumber: text });
+    fetchRouteSuggestions(text);
   };
+
+  const selectRoute = (route) => {
+    setTrip({ ...trip, routeNumber: route.route_number });
+    setShowSuggestions(false);
+  };
+
+  const renderSuggestion = ({ item }) => (
+    <TouchableOpacity style={styles.suggestionItem} onPress={() => selectRoute(item)}>
+      <Text style={styles.suggestionText}>{item.route_number}</Text>
+      <Text style={styles.suggestionSubText}>{`${item.from} → ${item.to}`}</Text>
+    </TouchableOpacity>
+  );
 
   if (isLoading) {
     return (
@@ -411,15 +537,7 @@ const HomeScreenDriver = ({ navigation, route }) => {
             />
           </View>
           <Text style={styles.loadingTitle}>Bus Tracker</Text>
-          <Text style={styles.loadingText}>Getting your current location...</Text>
-          <View style={styles.loadingProgressContainer}>
-            <View style={styles.loadingProgress}>
-              <View style={styles.loadingProgressBar} />
-            </View>
-          </View>
-        </View>
-        <View style={styles.loadingFooter}>
-          <Text style={styles.loadingFooterText}>Optimizing routes for your journey</Text>
+          <Text style={styles.loadingText}>Planning your trip...</Text>
         </View>
       </SafeAreaView>
     );
@@ -428,13 +546,11 @@ const HomeScreenDriver = ({ navigation, route }) => {
   if (showMap && currentLocation) {
     return (
       <SafeAreaView style={styles.fullScreenContainer}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="light-content" />
         <View style={styles.mapHeader}>
-          <View style={styles.mapHeaderLeftSection}>
-            <TouchableOpacity style={styles.menuButtonMap} onPress={toggleSidebar}>
-              <Feather name="menu" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.menuButtonMap} onPress={toggleSidebar}>
+            <Feather name="menu" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <FontAwesome5 name="bus" size={18} color="#FFFFFF" style={styles.headerIcon} />
             <Text style={styles.mapHeaderTitle}>Bus Tracker</Text>
@@ -455,47 +571,61 @@ const HomeScreenDriver = ({ navigation, route }) => {
         </View>
 
         <MapView
-          ref={mapRef}
-          provider={PROVIDER_GOOGLE}
-          style={styles.fullScreenMap}
-          initialRegion={currentLocation}
-          showsUserLocation={false}
-        >
-          {mapMarkers.map((marker, index) => (
-            <Marker
-              key={index}
-              coordinate={marker.coordinate}
-              title={marker.title}
-              pinColor={
-                marker.type === 'user' ? '#1976d2' : marker.type === 'start' ? '#3B82F6' : '#EF4444'
-              }
-            >
-              {marker.type === 'user' && (
-                <View style={styles.driverMarker}>
-                  <MaterialIcons name="directions-bus" size={24} color="#FFFFFF" />
-                </View>
-              )}
-            </Marker>
-          ))}
-          {locationHistory.length > 1 && (
-            <Polyline
-              coordinates={locationHistory}
-              strokeColor="#3B82F6"
-              strokeWidth={4}
-            />
-          )}
-          {destinationCoords && (
-            <Polyline
-              coordinates={[
-                { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
-                destinationCoords,
-              ]}
-              strokeColor="#EF4444"
-              strokeWidth={4}
-              lineDashPattern={[10, 10]}
-            />
-          )}
-        </MapView>
+  ref={mapRef}
+  provider={PROVIDER_GOOGLE}
+  style={styles.fullScreenMap}
+  initialRegion={currentLocation}
+  showsUserLocation={false}
+  showsMyLocationButton={true}
+>
+  {mapMarkers.map((marker) => (
+    <Marker
+      key={marker.id}
+      coordinate={marker.coordinate}
+      title={marker.title || 'Unknown Location'}
+      pinColor={
+        marker.type === 'user' ? '#1976d2' :
+        marker.type === 'start' ? '#10B981' :
+        marker.type === 'end' ? '#EF4444' :
+        '#3B82F6'
+      }
+    >
+      {marker.type === 'user' && (
+        <View style={styles.driverMarker}>
+          <MaterialIcons name="directions-bus" size={24} color="#FFFFFF" />
+        </View>
+      )}
+      {marker.type === 'start' && (
+        <View style={[styles.driverMarker, { backgroundColor: '#10B981' }]}>
+          <MaterialIcons name="play-arrow" size={24} color="#FFFFFF" />
+        </View>
+      )}
+      {marker.type === 'end' && (
+        <View style={[styles.driverMarker, { backgroundColor: '#EF4444' }]}>
+          <MaterialIcons name="stop" size={24} color="#FFFFFF" />
+        </View>
+      )}
+    </Marker>
+  ))}
+  {locationHistory.length > 1 && (
+    <Polyline
+      coordinates={locationHistory}
+      strokeColor="#3B82F6"
+      strokeWidth={4}
+    />
+  )}
+  {destinationCoords && (
+    <Polyline
+      coordinates={[
+        { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
+        destinationCoords,
+      ]}
+      strokeColor="#EF4444"
+      strokeWidth={4}
+      lineDashPattern={[10, 10]}
+    />
+  )}
+</MapView>
 
         <SidebarDriver
           visible={sidebarVisible}
@@ -551,25 +681,17 @@ const HomeScreenDriver = ({ navigation, route }) => {
         <View style={styles.tripInfoCard}>
           <Text style={styles.tripInfoTitle}>Trip Details</Text>
           <View style={styles.tripInfoRow}>
-            <MaterialIcons name="location-on" size={20} color="#3B82F6" />
-            <Text style={styles.tripInfoText}>From: {trip.from}</Text>
+            <MaterialIcons name="directions-bus" size={20} color="#6B7280" />
+            <Text style={styles.tripInfoText}>Route: {trip.routeNumber}</Text>
           </View>
           <View style={styles.tripInfoRow}>
-            <MaterialIcons name="location-on" size={20} color="#EF4444" />
-            <Text style={styles.tripInfoText}>To: {trip.to}</Text>
+            <FontAwesome5 name="users" size={20} color="#6B7280" />
+            <Text style={styles.tripInfoText}>Crowdness: {trip.crowdness}</Text>
           </View>
-          {trip.startTime && (
-            <View style={styles.tripInfoRow}>
-              <MaterialIcons name="access-time" size={20} color="#6B7280" />
-              <Text style={styles.tripInfoText}>Time: {trip.startTime}</Text>
-            </View>
-          )}
-          {trip.busDetails && (
-            <View style={styles.tripInfoRow}>
-              <MaterialIcons name="directions-bus" size={20} color="#6B7280" />
-              <Text style={styles.tripInfoText}>Bus: {trip.busDetails}</Text>
-            </View>
-          )}
+          <View style={styles.tripInfoRow}>
+            <MaterialIcons name="access-time" size={20} color="#6B7280" />
+            <Text style={styles.tripInfoText}>Start Time: {trip.startTime}</Text>
+          </View>
           <View style={styles.tripInfoRow}>
             <MaterialIcons name="directions" size={20} color="#10B981" />
             <Text style={styles.tripInfoText}>Status: {movementStatus}</Text>
@@ -577,9 +699,6 @@ const HomeScreenDriver = ({ navigation, route }) => {
           <View style={styles.tripInfoRow}>
             <MaterialIcons name="schedule" size={20} color="#10B981" />
             <Text style={styles.tripInfoText}>ETA: {estimatedArrival}</Text>
-            <TouchableOpacity onPress={handleRouteOptimization}>
-              <MaterialIcons name="refresh" size={20} color="#3B82F6" />
-            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[
@@ -607,12 +726,11 @@ const HomeScreenDriver = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
-        <View style={styles.headerLeftSection}>
-          <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
-            <Feather name="menu" size={24} color="#1976d2" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+          <Feather name="menu" size={24} color="#1976d2" />
+        </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <FontAwesome5 name="bus" size={18} color="#1976d2" style={styles.headerIcon} />
           <Text style={styles.headerTitle}>Bus Tracker</Text>
@@ -691,28 +809,34 @@ const HomeScreenDriver = ({ navigation, route }) => {
 
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
-            <MaterialIcons name="location-on" size={24} color="#3B82F6" style={styles.inputIcon} />
+            <MaterialIcons name="directions-bus" size={24} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="From (Current Location)"
+              placeholder="Route Number (e.g., 11A)"
               placeholderTextColor="#9CA3AF"
-              value={trip.from}
-              onChangeText={(text) => setTrip({ ...trip, from: text })}
-              editable={false}
+              value={trip.routeNumber}
+              onChangeText={handleRouteNumberChange}
             />
-            <View style={styles.currentLocationBadge}>
-              <Text style={styles.currentLocationText}>Current</Text>
-            </View>
           </View>
+          {showSuggestions && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={routeSuggestions}
+                renderItem={renderSuggestion}
+                keyExtractor={(item) => item._id}
+                style={styles.suggestionsList}
+              />
+            </View>
+          )}
 
           <View style={styles.inputContainer}>
-            <MaterialIcons name="location-on" size={24} color="#EF4444" style={styles.inputIcon} />
+            <FontAwesome5 name="users" size={24} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="To"
+              placeholder="Crowdness (Full/Half/Empty)"
               placeholderTextColor="#9CA3AF"
-              value={trip.to}
-              onChangeText={(text) => setTrip({ ...trip, to: text })}
+              value={trip.crowdness}
+              onChangeText={(text) => setTrip({ ...trip, crowdness: text })}
             />
           </View>
 
@@ -720,21 +844,10 @@ const HomeScreenDriver = ({ navigation, route }) => {
             <MaterialIcons name="access-time" size={24} color="#6B7280" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Start Time (e.g., 10:00 AM)"
+              placeholder="Start Time (e.g., 10:00)"
               placeholderTextColor="#9CA3AF"
               value={trip.startTime}
               onChangeText={(text) => setTrip({ ...trip, startTime: text })}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="directions-bus" size={24} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Bus Details (e.g., 1A, 42)"
-              placeholderTextColor="#9CA3AF"
-              value={trip.busDetails}
-              onChangeText={(text) => setTrip({ ...trip, busDetails: text })}
             />
           </View>
         </View>
@@ -776,13 +889,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#0d47a1',
-    shadowColor: '#1976d2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
   lottieAnimation: {
     width: 100,
@@ -799,31 +905,6 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     marginBottom: 32,
   },
-  loadingProgressContainer: {
-    width: 240,
-    alignItems: 'center',
-  },
-  loadingProgress: {
-    height: 6,
-    width: '100%',
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  loadingProgressBar: {
-    width: '60%',
-    height: '100%',
-    backgroundColor: '#1976d2',
-  },
-  loadingFooter: {
-    position: 'absolute',
-    bottom: 20,
-    alignItems: 'center',
-  },
-  loadingFooterText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -833,10 +914,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     elevation: 2,
     zIndex: 10,
-  },
-  headerLeftSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   menuButton: {
     padding: 5,
@@ -911,16 +988,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1F2937',
   },
-  currentLocationBadge: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  suggestionsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    maxHeight: 150,
+    marginBottom: 15,
+    elevation: 3,
   },
-  currentLocationText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
+  suggestionsList: {
+    padding: 10,
+  },
+  suggestionItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  suggestionText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  suggestionSubText: {
+    fontSize: 14,
+    color: '#6B7280',
   },
   startButton: {
     flexDirection: 'row',
@@ -973,10 +1062,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 15,
     elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
   tripInfoTitle: {
     fontSize: 18,
@@ -1034,10 +1119,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 15,
     elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
     width: width * 0.8,
     maxHeight: height * 0.4,
   },

@@ -2,22 +2,25 @@ const mongoose = require('mongoose');
 
 const busLocationSchema = new mongoose.Schema({
   driverId: { type: String, required: true },
-  busDetails: { type: String, required: true },
-  type: { type: String, enum: ['trip', 'location'], required: true },
-  from: { type: String },
-  to: { type: String },
+  busDetails: { type: String },
+  routeNumber: { type: String },
+  crowdness: { type: String },
   startTime: { type: String },
+  type: { type: String, enum: ['trip', 'location'], required: true },
   latitude: { type: Number },
   longitude: { type: Number },
   timestamp: { type: Date, default: Date.now },
+  currentLocation: {
+    latitude: { type: Number },
+    longitude: { type: Number },
+  },
   createdAt: { type: Date, default: Date.now },
 });
 
-// Pre-save middleware for conditional validation
 busLocationSchema.pre('save', function (next) {
   if (this.type === 'trip') {
-    if (!this.from || !this.to) {
-      return next(new Error('Fields "from" and "to" are required for type "trip"'));
+    if (!this.routeNumber || !this.crowdness || !this.startTime) {
+      return next(new Error('Fields "routeNumber", "crowdness", and "startTime" are required for type "trip"'));
     }
   } else if (this.type === 'location') {
     if (this.latitude == null || this.longitude == null) {
