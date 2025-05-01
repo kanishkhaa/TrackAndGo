@@ -10,11 +10,9 @@ import {
   Dimensions,
   Animated,
   Modal,
-  Image,
   Alert,
-  FlatList,
 } from 'react-native';
-import { FontAwesome5, MaterialIcons, Ionicons, Feather, MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
+import { FontAwesome5, MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import LottieView from 'lottie-react-native';
 import Sidebar from '../components/Sidebar';
@@ -23,8 +21,12 @@ import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { generateTravelTips, generateAlternateRoutes } from '../src/utils/geminiApi';
 
 const { width, height } = Dimensions.get('window');
+
+const API_URL = 'http://192.168.11.179:3000';
+const GEOAPIFY_API_KEY = '7b3757a8e0994af49ee07c57f01d616f';
 
 const THEME_COLOR = '#1976d2';
 const ACCENT_COLOR = '#FF9800';
@@ -32,61 +34,37 @@ const SUCCESS_COLOR = '#4CAF50';
 const DANGER_COLOR = '#F44336';
 const WARNING_COLOR = '#FFC107';
 
-// Frequently used locations
-const FREQUENT_LOCATIONS = [
-  { id: '1', name: 'BIT College', address: 'Sathyamangalam, Erode' },
-  { id: '2', name: 'Namakkal Bus Stand', address: 'Namakkal' },
-  { id: '3', name: 'Erode Junction', address: 'Erode' },
-  { id: '4', name: 'Coimbatore Airport', address: 'Coimbatore' },
-];
-
-// Mock bus schedules data
-const BUS_SCHEDULES = {
-  'S12': [
-    { departure: '07:30 AM', arrival: '08:00 AM' },
-    { departure: '08:30 AM', arrival: '09:00 AM' },
-    { departure: '09:30 AM', arrival: '10:00 AM' },
-  ],
-  'E45': [
-    { departure: '08:00 AM', arrival: '08:45 AM' },
-    { departure: '09:00 AM', arrival: '09:45 AM' },
-    { departure: '10:00 AM', arrival: '10:45 AM' },
-  ],
-  'N78': [
-    { departure: '08:15 AM', arrival: '09:15 AM' },
-    { departure: '09:15 AM', arrival: '10:15 AM' },
-    { departure: '10:15 AM', arrival: '11:15 AM' },
-  ],
-};
-
 const JourneyPlannerScreen = () => {
   const { user } = useContext(UserContext);
   const navigation = useNavigation();
   const mapRef = useRef(null);
   const journeyAnimationRef = useRef(null);
-  
+
   // States
   const [showStartScreen, setShowStartScreen] = useState(true);
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
   const [journeyPlan, setJourneyPlan] = useState(null);
+  const [alternateRoutes, setAlternateRoutes] = useState([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0); // 0 for primary, 1+ for alternates
   const [currentLocation, setCurrentLocation] = useState(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('journey');
   const [trackingJourney, setTrackingJourney] = useState(false);
   const [locationError, setLocationError] = useState(null);
-  const [showFrequentLocations, setShowFrequentLocations] = useState(false);
-  const [selectingFor, setSelectingFor] = useState(null); // 'from' or 'to'
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [showLiveTrackingModal, setShowLiveTrackingModal] = useState(false);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState('');
+  const [showTravelTips, setShowTravelTips] = useState(false);
+  const [travelTips, setTravelTips] = useState([
+    'Book tickets in advance during peak hours',
+    'Keep small change ready for bus fare',
+  ]);
+  const [detailedTravelTips, setDetailedTravelTips] = useState([]);
   const [routeProgress, setRouteProgress] = useState(0);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedBus, setSelectedBus] = useState(null);
-  const [showLiveTrackingModal, setShowLiveTrackingModal] = useState(false);
-  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState('45 min');
-  const [showAlternateRoutes, setShowAlternateRoutes] = useState(false);
-  const [weatherInfo, setWeatherInfo] = useState({ condition: 'Sunny', temperature: '28°C' });
-  const [showTravelTips, setShowTravelTips] = useState(false);
-  
+
   // Animated values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(-300))[0];
@@ -115,12 +93,15 @@ const JourneyPlannerScreen = () => {
           latitudeDelta: 0.03,
           longitudeDelta: 0.03,
         });
+
+        // Fetch generic travel tips based on current location
+        const tips = await generateTravelTips('Current Location', 'Nearby Destinations', {});
+        setTravelTips(tips);
       } catch (error) {
         setLocationError('Failed to fetch location');
       }
     })();
 
-    // Start animations
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 1000,
@@ -128,9 +109,8 @@ const JourneyPlannerScreen = () => {
     }).start();
   }, []);
 
-  // Pulse animation for live tracking
   useEffect(() => {
-    if (trackingJourney) {
+    if (trackingJourney && journeyPlan) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -146,47 +126,18 @@ const JourneyPlannerScreen = () => {
         ])
       ).start();
 
-      // Simulate progress updates
       const interval = setInterval(() => {
         setRouteProgress(prev => {
           const newProgress = prev + 0.01;
-          
-          // Update progress animation
           Animated.timing(progressAnim, {
             toValue: newProgress > 1 ? 1 : newProgress,
             duration: 500,
             useNativeDriver: false,
           }).start();
-          
-          if (newProgress >= 0.33 && currentSegmentIndex === 0) {
-            setCurrentSegmentIndex(1);
-            if (mapRef.current) {
-              mapRef.current.animateToRegion({
-                latitude: 11.4522, 
-                longitude: 77.6937,
-                latitudeDelta: 0.03,
-                longitudeDelta: 0.03,
-              }, 1000);
-            }
-          }
-          
-          if (newProgress >= 0.66 && currentSegmentIndex === 1) {
-            setCurrentSegmentIndex(2);
-            if (mapRef.current) {
-              mapRef.current.animateToRegion({
-                latitude: 11.3410, 
-                longitude: 77.7172,
-                latitudeDelta: 0.03,
-                longitudeDelta: 0.03,
-              }, 1000);
-            }
-          }
-          
-          // Calculate remaining time
+
+          const totalMinutes = journeyPlan.totalMinutes;
           const remainingPercentage = 1 - newProgress;
-          const totalMinutes = 135; // 2h 15m in minutes
           const remainingMinutes = Math.round(remainingPercentage * totalMinutes);
-          
           if (remainingMinutes > 60) {
             const hours = Math.floor(remainingMinutes / 60);
             const minutes = remainingMinutes % 60;
@@ -194,14 +145,31 @@ const JourneyPlannerScreen = () => {
           } else {
             setEstimatedTimeRemaining(`${remainingMinutes}m`);
           }
-          
+
+          if (newProgress >= 1) {
+            clearInterval(interval);
+          }
           return newProgress > 1 ? 1 : newProgress;
         });
       }, 3000);
-      
+
       return () => clearInterval(interval);
     }
-  }, [trackingJourney, currentSegmentIndex]);
+  }, [trackingJourney, journeyPlan]);
+
+  useEffect(() => {
+    if (showTravelTips) {
+      const fetchDetailedTips = async () => {
+        const tips = await generateTravelTips(
+          fromLocation || 'Current Location',
+          toLocation || 'Nearby Destinations',
+          journeyPlan || {}
+        );
+        setDetailedTravelTips(tips);
+      };
+      fetchDetailedTips();
+    }
+  }, [showTravelTips, fromLocation, toLocation, journeyPlan]);
 
   const toggleSidebar = () => {
     Animated.timing(slideAnim, {
@@ -222,135 +190,186 @@ const JourneyPlannerScreen = () => {
     navigation.navigate('Onboarding');
   };
 
-  const openFrequentLocations = (type) => {
-    setSelectingFor(type);
-    setShowFrequentLocations(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const selectFrequentLocation = (location) => {
-    if (selectingFor === 'from') {
-      setFromLocation(location.name);
-    } else {
-      setToLocation(location.name);
+  const geocodeLocation = async (query) => {
+    try {
+      const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&apiKey=${GEOAPIFY_API_KEY}&limit=1&format=json&lang=en&bias=proximity:77.7172,11.3410`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.results.length > 0) {
+        const { lat, lon } = data.results[0];
+        return { latitude: lat, longitude: lon };
+      }
+      return null;
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return null;
     }
-    setShowFrequentLocations(false);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const planJourney = () => {
+  const planJourney = async () => {
     if (!fromLocation || !toLocation) {
       Alert.alert('Missing Information', 'Please enter both starting point and destination');
       return;
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      const encodedFrom = encodeURIComponent(fromLocation.trim());
+      const encodedTo = encodeURIComponent(toLocation.trim());
 
-    // Mock journey planning logic
-    if (
-      fromLocation.toLowerCase().includes('bit') &&
-      toLocation.toLowerCase().includes('namakkal')
-    ) {
-      setJourneyPlan({
-        segments: [
-          {
-            from: 'BIT College',
-            to: 'Sathyamangalam',
-            busNumber: 'S12',
-            type: 'Express',
-            duration: '30 min',
-            eta: '8:30 AM',
-            price: '₹35',
-            occupancy: '65%',
-            amenities: ['AC', 'WiFi'],
-            coordinates: [
-              { latitude: 11.3410, longitude: 77.7172 },
-              { latitude: 11.4522, longitude: 77.6937 },
-            ],
-            stops: ['BIT Campus', 'Sathy Town', 'Sathy Bus Stand'],
-          },
-          {
-            from: 'Sathyamangalam',
-            to: 'Erode',
-            busNumber: 'E45',
-            type: 'Local',
-            duration: '45 min',
-            eta: '9:15 AM',
-            price: '₹45',
-            occupancy: '40%',
-            amenities: ['Non-AC'],
-            coordinates: [
-              { latitude: 11.4522, longitude: 77.6937 },
-              { latitude: 11.3410, longitude: 77.7172 },
-            ],
-            stops: ['Sathy Bus Stand', 'Bhavani', 'Erode Central'],
-          },
-          {
-            from: 'Erode',
-            to: 'Namakkal',
-            busNumber: 'N78',
-            type: 'Express',
-            duration: '1 hr',
-            eta: '10:15 AM',
-            price: '₹60',
-            occupancy: '80%',
-            amenities: ['AC', 'USB Charging'],
-            coordinates: [
-              { latitude: 11.3410, longitude: 77.7172 },
-              { latitude: 11.2213, longitude: 78.1677 },
-            ],
-            stops: ['Erode Central', 'Perundurai', 'Namakkal Bus Stand'],
-          },
-        ],
-        totalDuration: '2 hr 15 min',
-        totalPrice: '₹140',
-        transfers: 2,
-        carbonFootprint: '3.2 kg CO₂',
-        alternateRoutes: [
-          {
-            name: 'Faster Route',
-            duration: '1 hr 50 min',
-            price: '₹190',
-            transfers: 1,
-            note: 'Includes premium express bus'
-          },
-          {
-            name: 'Budget Route',
-            duration: '2 hr 45 min',
-            price: '₹100',
-            transfers: 3,
-            note: 'All non-AC buses'
+      console.log(`Fetching route from ${encodedFrom} to ${encodedTo}`);
+      const response = await fetch(
+        `${API_URL}/api/long-distance/route/${encodedFrom}/${encodedTo}`
+      );
+      const data = await response.json();
+
+      console.log('API Response:', data);
+
+      if (!response.ok || data.message) {
+        Alert.alert('Route Not Found', data.message || 'No routes found for this journey. Please try different locations.');
+        return;
+      }
+
+      if (data.length === 0) {
+        Alert.alert('Route Not Found', 'No routes found for this journey. Please try different locations.');
+        return;
+      }
+
+      const route = data[0];
+      const locations = [route.from, ...route.bus_stops, route.to];
+      const coordinatesPromises = locations.map(location => geocodeLocation(location));
+      const coordinatesResults = await Promise.all(coordinatesPromises);
+      const coordinates = coordinatesResults.filter(coord => coord !== null);
+
+      if (coordinates.length < 2) {
+        Alert.alert('Error', 'Unable to geocode locations for mapping. Please try again.');
+        return;
+      }
+
+      const [hours, minutes] = route.travel_time.split(' ')[0].split(':').map(Number);
+      const totalMinutes = hours * 60 + minutes;
+
+      const primaryJourneyPlan = {
+        segments: [{
+          from: route.from,
+          to: route.to,
+          busNumber: 'LD-001',
+          type: 'Long-Distance',
+          duration: route.travel_time,
+          eta: route.departures_from_start[0] || 'N/A',
+          price: '₹500',
+          occupancy: '50%',
+          amenities: ['AC', 'WiFi'],
+          coordinates,
+          stops: locations,
+          mode: 'Bus',
+          reason: 'Primary route provided by the system',
+        }],
+        totalDuration: route.travel_time,
+        totalPrice: '₹500',
+        transfers: 0,
+        carbonFootprint: '5.0 kg CO₂',
+        totalMinutes,
+        departures: route.departures_from_start,
+      };
+
+      // Fetch alternate routes
+      const alternateRoutesRaw = await generateAlternateRoutes(fromLocation, toLocation, primaryJourneyPlan);
+      const alternateJourneyPlans = await Promise.all(
+        alternateRoutesRaw.map(async (altRoute, index) => {
+          const altLocations = [altRoute.from, ...(altRoute.stops || []), altRoute.to];
+          const altCoordinatesPromises = altLocations.map(location => geocodeLocation(location));
+          const altCoordinatesResults = await Promise.all(altCoordinatesPromises);
+          const altCoordinates = altCoordinatesResults.filter(coord => coord !== null);
+
+          if (altCoordinates.length < 2) {
+            return null; // Skip invalid routes
           }
-        ]
+
+          const [altHours, altMinutes] = altRoute.travelTime.replace('h ', ':').replace('m', '').split(':').map(Number);
+          const altTotalMinutes = altHours * 60 + altMinutes;
+
+          return {
+            segments: [{
+              from: altRoute.from,
+              to: altRoute.to,
+              busNumber: `ALT-${index + 1}`,
+              type: altRoute.mode,
+              duration: altRoute.travelTime,
+              eta: 'N/A', // Placeholder, can be enhanced with real data
+              price: '₹550', // Placeholder, adjust as needed
+              occupancy: '45%',
+              amenities: ['AC'],
+              coordinates: altCoordinates,
+              stops: altLocations,
+              mode: altRoute.mode,
+              reason: altRoute.reason,
+            }],
+            totalDuration: altRoute.travelTime,
+            totalPrice: '₹550',
+            transfers: altRoute.stops.length,
+            carbonFootprint: '4.5 kg CO₂',
+            totalMinutes: altTotalMinutes,
+            departures: [], // Placeholder
+          };
+        })
+      );
+
+      const validAlternateRoutes = alternateJourneyPlans.filter(route => route !== null);
+
+      setJourneyPlan(primaryJourneyPlan);
+      setAlternateRoutes(validAlternateRoutes);
+      setSelectedRouteIndex(0);
+
+      // Fetch AI-generated travel tips
+      const tips = await generateTravelTips(fromLocation, toLocation, {
+        duration: route.travel_time,
+        stops: route.bus_stops,
       });
-    } else {
-      Alert.alert('Route Not Found', 'No routes found for this journey. Try BIT to Namakkal.');
+      setTravelTips(tips);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('Plan Journey Error:', error);
+      Alert.alert('Error', 'Failed to plan journey. Please check your connection and try again.');
     }
+  };
+
+  const selectRoute = (index) => {
+    setSelectedRouteIndex(index);
+    const selectedJourney = index === 0 ? journeyPlan : alternateRoutes[index - 1];
+    setEstimatedTimeRemaining(selectedJourney.totalDuration);
+    if (mapRef.current && selectedJourney?.segments?.[0]?.coordinates) {
+      mapRef.current.fitToCoordinates(selectedJourney.segments[0].coordinates, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const startJourney = () => {
     setTrackingJourney(true);
     setShowStartScreen(false);
-    
+
     if (journeyAnimationRef.current) {
       journeyAnimationRef.current.play();
     }
-    
-    // Initial focus on first segment
-    if (mapRef.current && journeyPlan?.segments?.[0]?.coordinates) {
-      mapRef.current.animateToRegion({
-        latitude: journeyPlan.segments[0].coordinates[0].latitude,
-        longitude: journeyPlan.segments[0].coordinates[0].longitude,
-        latitudeDelta: 0.03,
-        longitudeDelta: 0.03,
-      }, 1000);
+
+    const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
+    if (mapRef.current && selectedJourney?.segments?.[0]?.coordinates) {
+      mapRef.current.fitToCoordinates(selectedJourney.segments[0].coordinates, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
     }
-    
+
+    setEstimatedTimeRemaining(selectedJourney.totalDuration);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const showBusSchedule = (busNumber) => {
-    setSelectedBus(busNumber);
+  const showBusSchedule = () => {
+    const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
+    setSelectedRoute(selectedJourney);
     setShowScheduleModal(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
@@ -386,53 +405,6 @@ const JourneyPlannerScreen = () => {
 
   const renderPlanner = () => (
     <View style={styles.plannerContainer}>
-      <View style={styles.topDestinationsContainer}>
-        <Text style={styles.sectionTitle}>Popular Routes</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.popularRoutes}>
-          <TouchableOpacity 
-            style={styles.popularRoute}
-            onPress={() => {
-              setFromLocation('BIT College');
-              setToLocation('Namakkal');
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-          >
-            <LinearGradient colors={['#4CAF50', '#2E7D32']} style={styles.popularRouteGradient}>
-              <MaterialIcons name="directions-bus" size={16} color="#fff" />
-              <Text style={styles.popularRouteText}>BIT → Namakkal</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.popularRoute}
-            onPress={() => {
-              setFromLocation('BIT College');
-              setToLocation('Erode');
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-          >
-            <LinearGradient colors={['#FF9800', '#EF6C00']} style={styles.popularRouteGradient}>
-              <MaterialIcons name="directions-bus" size={16} color="#fff" />
-              <Text style={styles.popularRouteText}>BIT → Erode</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.popularRoute}
-            onPress={() => {
-              setFromLocation('BIT College');
-              setToLocation('Coimbatore');
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-          >
-            <LinearGradient colors={['#9C27B0', '#7B1FA2']} style={styles.popularRouteGradient}>
-              <MaterialIcons name="directions-bus" size={16} color="#fff" />
-              <Text style={styles.popularRouteText}>BIT → Coimbatore</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
       <View style={styles.locationInputsContainer}>
         <View style={styles.inputGroup}>
           <View style={styles.inputContainer}>
@@ -443,11 +415,8 @@ const JourneyPlannerScreen = () => {
               value={fromLocation}
               onChangeText={setFromLocation}
             />
-            <TouchableOpacity onPress={() => openFrequentLocations('from')}>
-              <MaterialIcons name="bookmark" size={20} color={THEME_COLOR} />
-            </TouchableOpacity>
           </View>
-          
+
           <View style={styles.inputContainer}>
             <MaterialIcons name="location-on" size={20} color="#777" style={styles.inputIcon} />
             <TextInput
@@ -456,12 +425,9 @@ const JourneyPlannerScreen = () => {
               value={toLocation}
               onChangeText={setToLocation}
             />
-            <TouchableOpacity onPress={() => openFrequentLocations('to')}>
-              <MaterialIcons name="bookmark" size={20} color={THEME_COLOR} />
-            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.swapButton}
             onPress={() => {
               const temp = fromLocation;
@@ -473,7 +439,7 @@ const JourneyPlannerScreen = () => {
             <MaterialIcons name="swap-vert" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
-        
+
         <TouchableOpacity
           style={[styles.searchButton, (!fromLocation || !toLocation) && styles.disabledButton]}
           onPress={planJourney}
@@ -488,7 +454,7 @@ const JourneyPlannerScreen = () => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
-      
+
       {currentLocation && (
         <View style={styles.miniMapContainer}>
           <Text style={styles.sectionTitle}>Your Location</Text>
@@ -503,12 +469,13 @@ const JourneyPlannerScreen = () => {
           />
         </View>
       )}
-      
+
       <View style={styles.tipsContainer}>
         <Text style={styles.tipsTitle}>Travel Tips</Text>
-        <Text style={styles.tipText}>• Book tickets in advance during peak hours</Text>
-        <Text style={styles.tipText}>• Keep small change ready for bus fare</Text>
-        <TouchableOpacity 
+        {travelTips.map((tip, index) => (
+          <Text key={index} style={styles.tipText}>• {tip}</Text>
+        ))}
+        <TouchableOpacity
           style={styles.showMoreTips}
           onPress={() => setShowTravelTips(true)}
         >
@@ -518,562 +485,247 @@ const JourneyPlannerScreen = () => {
     </View>
   );
 
-  const renderJourneyPlan = () => (
-    <View style={styles.journeyContainer}>
-      <View style={styles.mapContainer}>
-        {currentLocation && (
-          <MapView
-            ref={mapRef}
-            provider={PROVIDER_GOOGLE}
-            style={styles.map}
-            initialRegion={currentLocation}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-          >
-            {journeyPlan?.segments?.map((segment, index) =>
-              segment.coordinates.map((coord, coordIndex) => (
+  const renderJourneyPlan = () => {
+    const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
+
+    return (
+      <View style={styles.journeyContainer}>
+        <View style={styles.routeSelectorContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              style={[styles.routeButton, selectedRouteIndex === 0 && styles.activeRouteButton]}
+              onPress={() => selectRoute(0)}
+            >
+              <Text style={[styles.routeButtonText, selectedRouteIndex === 0 && styles.activeRouteButtonText]}>
+                Primary Route ({journeyPlan?.totalDuration})
+              </Text>
+            </TouchableOpacity>
+            {alternateRoutes.map((route, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.routeButton, selectedRouteIndex === index + 1 && styles.activeRouteButton]}
+                onPress={() => selectRoute(index + 1)}
+              >
+                <Text style={[styles.routeButtonText, selectedRouteIndex === index + 1 && styles.activeRouteButtonText]}>
+                  Alternate {index + 1} ({route.totalDuration})
+                </Text>
+                <Text style={styles.routeReason}>{route.segments[0].reason}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={styles.mapContainer}>
+          {currentLocation && (
+            <MapView
+              ref={mapRef}
+              provider={PROVIDER_GOOGLE}
+              style={styles.map}
+              initialRegion={currentLocation}
+              showsUserLocation={true}
+              showsMyLocationButton={true}
+            >
+              {selectedJourney?.segments?.[0]?.coordinates?.map((coord, index) => (
                 <Marker
-                  key={`${index}-${coordIndex}`}
+                  key={index}
                   coordinate={coord}
-                  title={coordIndex === 0 ? segment.from : segment.to}
+                  title={selectedJourney.segments[0].stops[index]}
                 >
                   <View style={[
                     styles.markerContainer,
-                    currentSegmentIndex === index && coordIndex === 0 && trackingJourney ? styles.activeMarker : {}
+                    index === 0 && trackingJourney ? styles.activeMarker : {}
                   ]}>
-                    {coordIndex === 0 ? (
+                    {index === 0 ? (
                       <MaterialIcons name="directions-bus" size={18} color="#fff" />
                     ) : (
                       <MaterialIcons name="location-on" size={18} color="#fff" />
                     )}
                   </View>
                 </Marker>
-              ))
-            )}
-            {journeyPlan?.segments?.map((segment, index) => (
-              <Polyline
-                key={index}
-                coordinates={segment.coordinates}
-                strokeColor={currentSegmentIndex === index && trackingJourney ? ACCENT_COLOR : THEME_COLOR}
-                strokeWidth={currentSegmentIndex === index && trackingJourney ? 6 : 4}
-              />
-            ))}
-          </MapView>
-        )}
-        {locationError && (
-          <Text style={styles.errorText}>{locationError}</Text>
-        )}
-        
-        {trackingJourney && (
-          <View style={styles.liveTrackingOverlay}>
-            <Animated.View style={[styles.pulseIndicator, { transform: [{ scale: pulseAnim }] }]}>
-              <MaterialCommunityIcons name="access-point" size={16} color="#fff" />
-            </Animated.View>
-            <Text style={styles.liveText}>LIVE</Text>
-            <TouchableOpacity 
-              style={styles.trackingDetailButton}
-              onPress={() => setShowLiveTrackingModal(true)}
-            >
-              <Text style={styles.trackingDetailText}>Details</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.journeySummaryContainer}>
-        <View style={styles.journeyHeaderContainer}>
-          <View>
-            <Text style={styles.journeyTitle}>{fromLocation} → {toLocation}</Text>
-            <View style={styles.journeyStats}>
-              <MaterialIcons name="access-time" size={14} color="#555" />
-              <Text style={styles.journeyStatText}>{journeyPlan.totalDuration}</Text>
-              <MaterialIcons name="multiple-stop" size={14} color="#555" />
-              <Text style={styles.journeyStatText}>{journeyPlan.transfers} transfers</Text>
-              <MaterialIcons name="account-balance-wallet" size={14} color="#555" />
-              <Text style={styles.journeyStatText}>{journeyPlan.totalPrice}</Text>
-            </View>
-          </View>
-          
-          {!trackingJourney ? (
-            <TouchableOpacity
-              style={styles.startJourneyButtonSmall}
-              onPress={startJourney}
-            >
-              <Text style={styles.startJourneyButtonText}>Start</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.etaContainer}>
-              <Text style={styles.etaLabel}>ETA</Text>
-              <Text style={styles.etaTime}>{estimatedTimeRemaining}</Text>
+              ))}
+              {selectedJourney?.segments?.[0]?.coordinates && (
+                <Polyline
+                  coordinates={selectedJourney.segments[0].coordinates}
+                  strokeColor={trackingJourney ? ACCENT_COLOR : THEME_COLOR}
+                  strokeWidth={trackingJourney ? 6 : 4}
+                />
+              )}
+            </MapView>
+          )}
+          {locationError && (
+            <Text style={styles.errorText}>{locationError}</Text>
+          )}
+
+          {trackingJourney && (
+            <View style={styles.liveTrackingOverlay}>
+              <Animated.View style={[styles.pulseIndicator, { transform: [{ scale: pulseAnim }] }]}>
+                <MaterialCommunityIcons name="access-point" size={16} color="#fff" />
+              </Animated.View>
+              <Text style={styles.liveText}>LIVE</Text>
+              <TouchableOpacity
+                style={styles.trackingDetailButton}
+                onPress={() => setShowLiveTrackingModal(true)}
+              >
+                <Text style={styles.trackingDetailText}>Details</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
-        
-        {trackingJourney && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBackground}>
-              <Animated.View 
-                style={[
-                  styles.progressFill, 
-                  { width: progressAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%']
-                  })}
-                ]} 
-              />
+
+        <View style={styles.journeySummaryContainer}>
+          <View style={styles.journeyHeaderContainer}>
+            <View>
+              <Text style={styles.journeyTitle}>{selectedJourney.segments[0].from} → {selectedJourney.segments[0].to}</Text>
+              <View style={styles.journeyStats}>
+                <MaterialIcons name="access-time" size={14} color="#555" />
+                <Text style={styles.journeyStatText}>{selectedJourney.totalDuration}</Text>
+                <MaterialIcons name="multiple-stop" size={14} color="#555" />
+                <Text style={styles.journeyStatText}>{selectedJourney.transfers} transfers</Text>
+                <MaterialIcons name="account-balance-wallet" size={14} color="#555" />
+                <Text style={styles.journeyStatText}>{selectedJourney.totalPrice}</Text>
+              </View>
             </View>
-            <View style={styles.progressLabels}>
-              <Text style={styles.progressStart}>{fromLocation}</Text>
-              <Text style={styles.progressEnd}>{toLocation}</Text>
-            </View>
+
+            {!trackingJourney ? (
+              <TouchableOpacity
+                style={styles.startJourneyButtonSmall}
+                onPress={startJourney}
+              >
+                <Text style={styles.startJourneyButtonText}>Start</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.etaContainer}>
+                <Text style={styles.etaLabel}>ETA</Text>
+                <Text style={styles.etaTime}>{estimatedTimeRemaining}</Text>
+              </View>
+            )}
           </View>
-        )}
-      </View>
-      
-      <View style={styles.roadmapContainer}>
-        <Text style={styles.roadmapTitle}>Your Journey Roadmap</Text>
-        <ScrollView style={styles.roadmap}>
-          {journeyPlan.segments.map((segment, index) => (
-            <View 
-              key={index} 
-              style={[
-                styles.segment, 
-                trackingJourney && index === currentSegmentIndex && styles.activeSegment
-              ]}
-            >
-              <View style={styles.segmentHeader}>
-                <View style={styles.segmentTitleContainer}>
-                  {index === 0 && (
+
+          {trackingJourney && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBackground}>
+                <Animated.View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0%', '100%'],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.progressLabels}>
+                <Text style={styles.progressStart}>{selectedJourney.segments[0].from}</Text>
+                <Text style={styles.progressEnd}>{selectedJourney.segments[0].to}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.roadmapContainer}>
+          <Text style={styles.roadmapTitle}>Your Journey Roadmap</Text>
+          <ScrollView style={styles.roadmap}>
+            {selectedJourney.segments.map((segment, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.segment,
+                  trackingJourney && index === currentSegmentIndex && styles.activeSegment,
+                ]}
+              >
+                <View style={styles.segmentHeader}>
+                  <View style={styles.segmentTitleContainer}>
                     <View style={styles.startDot}>
                       <MaterialIcons name="trip-origin" size={16} color={THEME_COLOR} />
                     </View>
-                  )}
-                  
-                  {index > 0 && (
-                    <View style={styles.transferDot}>
-                      <MaterialIcons name="change-history" size={16} color={WARNING_COLOR} />
-                    </View>
-                  )}
-                  
-                  <View>
-                    <Text style={styles.segmentTitle}>
-                      {segment.from} → {segment.to}
-                    </Text>
-                    <View style={styles.segmentBadges}>
-                      <View style={[styles.badge, styles.typeBadge]}>
-                        <Text style={styles.badgeText}>{segment.type}</Text>
-                      </View>
-                      {segment.amenities.map((amenity, i) => (
-                        <View key={i} style={[styles.badge, styles.amenityBadge]}>
-                          <Text style={styles.badgeText}>{amenity}</Text>
+                    <View>
+                      <Text style={styles.segmentTitle}>
+                        {segment.from} → {segment.to}
+                      </Text>
+                      <View style={styles.segmentBadges}>
+                        <View style={[styles.badge, styles.typeBadge]}>
+                          <Text style={styles.badgeText}>{segment.type}</Text>
                         </View>
-                      ))}
+                        {segment.amenities.map((amenity, i) => (
+                          <View key={i} style={[styles.badge, styles.amenityBadge]}>
+                            <Text style={styles.badgeText}>{amenity}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      {segment.reason && (
+                        <Text style={styles.segmentReason}>{segment.reason}</Text>
+                      )}
                     </View>
                   </View>
-                </View>
-                
-                <TouchableOpacity 
-                  style={styles.busNumberButton}
-                  onPress={() => showBusSchedule(segment.busNumber)}
-                >
-                  <Text style={styles.busNumber}>Bus {segment.busNumber}</Text>
-                  <MaterialIcons name="schedule" size={14} color={THEME_COLOR} />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.segmentDetails}>
-                <View style={styles.segmentDetail}>
-                  <MaterialIcons name="access-time" size={14} color="#555" />
-                  <Text style={styles.segmentInfo}>{segment.duration}</Text>
-                </View>
-                <View style={styles.segmentDetail}>
-                  <MaterialIcons name="attach-money" size={14} color="#555" />
-                  <Text style={styles.segmentInfo}>{segment.price}</Text>
-                </View>
-                <View style={styles.segmentDetail}>
-                  <MaterialIcons name="people" size={14} color="#555" />
-                  <Text style={styles.segmentInfo}>Occupancy: {segment.occupancy}</Text>
-                </View>
-              </View>
-              
-              <View style={styles.stopsContainer}>
-                <Text style={styles.stopsTitle}>Stops:</Text>
-                <View style={styles.stopsList}>
-                  {segment.stops.map((stop, i) => (
-                    <View key={i} style={styles.stopItem}>
-                      <View style={styles.stopDot} />
-                      <Text style={styles.stopText}>{stop}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              
-              {index < journeyPlan.segments.length - 1 && (
-                <View style={styles.waitingTimeContainer}>
-                  <MaterialIcons name="hourglass-bottom" size={14} color="#777" />
-                  <Text style={styles.waitingTime}>Waiting: ~10 min at {segment.to}</Text>
-                </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-      
-      <View style={styles.actionBar}>
-        <View style={styles.journeyInfoContainer}>
-          <View style={styles.infoItem}>
-            <MaterialCommunityIcons name="leaf" size={18} color="#4CAF50" />
-            <Text style={styles.infoText}>{journeyPlan.carbonFootprint}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <MaterialCommunityIcons name="weather-partly-cloudy" size={18} color="#FF9800" />
-            <Text style={styles.infoText}>{weatherInfo.condition}</Text>
-          </View>
-        </View>
-        
-        {!trackingJourney ? (
-          <TouchableOpacity 
-            style={styles.startJourneyButton} 
-            onPress={startJourney}
-          >
-            <LinearGradient
-              colors={[SUCCESS_COLOR, '#2E7D32']}
-              style={styles.gradientButton}
-            >
-              <Text style={styles.startJourneyButtonText}>Let's Start the Journey</Text>
-              <MaterialIcons name="directions" size={20} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity 
-            style={styles.alternateRoutesButton}
-            onPress={() => setShowAlternateRoutes(true)}
-          >
-            <LinearGradient
-              colors={[THEME_COLOR, '#0d47a1']}
-              style={styles.gradientButton}
-            >
-              <Text style={styles.alternateRoutesText}>Show Alternate Routes</Text>
-              <MaterialIcons name="alt-route" size={18} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
-      </View>
-      
-      {/* Bus Schedule Modal */}
-      <Modal
-        visible={showScheduleModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowScheduleModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bus {selectedBus} Schedule</Text>
-              <TouchableOpacity onPress={() => setShowScheduleModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.scheduleList}>
-              {selectedBus && BUS_SCHEDULES[selectedBus]?.map((schedule, index) => (
-                <View key={index} style={styles.scheduleItem}>
-                  <View style={styles.scheduleTimes}>
-                    <View style={styles.scheduleTimeBlock}>
-                      <Text style={styles.scheduleTimeLabel}>Departure</Text>
-                      <Text style={styles.scheduleTime}>{schedule.departure}</Text>
-                    </View>
-                    <MaterialIcons name="arrow-forward" size={20} color="#777" />
-                    <View style={styles.scheduleTimeBlock}>
-                      <Text style={styles.scheduleTimeLabel}>Arrival</Text>
-                      <Text style={styles.scheduleTime}>{schedule.arrival}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={styles.scheduleBookButton}>
-                    <Text style={styles.scheduleBookText}>Book</Text>
+
+                  <TouchableOpacity
+                    style={styles.busNumberButton}
+                    onPress={() => showBusSchedule()}
+                  >
+                    <Text style={styles.busNumber}>{segment.mode} {segment.busNumber}</Text>
+                    <MaterialIcons name="schedule" size={14} color={THEME_COLOR} />
                   </TouchableOpacity>
                 </View>
-              ))}
+
+                <View style={styles.segmentDetails}>
+                  <View style={styles.segmentDetail}>
+                    <MaterialIcons name="access-time" size={14} color="#555" />
+                    <Text style={styles.segmentInfo}>{segment.duration}</Text>
+                  </View>
+                  <View style={styles.segmentDetail}>
+                    <MaterialIcons name="attach-money" size={14} color="#555" />
+                    <Text style={styles.segmentInfo}>{segment.price}</Text>
+                  </View>
+                  <View style={styles.segmentDetail}>
+                    <MaterialIcons name="people" size={14} color="#555" />
+                    <Text style={styles.segmentInfo}>Occupancy: {segment.occupancy}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.stopsContainer}>
+                  <Text style={styles.stopsTitle}>Stops:</Text>
+                  <View style={styles.stopsList}>
+                    {segment.stops.map((stop, i) => (
+                      <View key={i} style={styles.stopItem}>
+                        <View style={styles.stopDot} />
+                        <Text style={styles.stopText}>{stop}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={styles.actionBar}>
+          <View style={styles.journeyInfoContainer}>
+            <View style={styles.infoItem}>
+              <MaterialCommunityIcons name="leaf" size={18} color="#4CAF50" />
+              <Text style={styles.infoText}>{selectedJourney.carbonFootprint}</Text>
             </View>
-            
-            <TouchableOpacity style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View All Schedules</Text>
+          </View>
+
+          {!trackingJourney && (
+            <TouchableOpacity
+              style={styles.startJourneyButton}
+              onPress={startJourney}
+            >
+              <LinearGradient
+                colors={[SUCCESS_COLOR, '#2E7D32']}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.startJourneyButtonText}>Let's Start the Journey</Text>
+                <MaterialIcons name="directions" size={20} color="#fff" />
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
+          )}
         </View>
-      </Modal>
-      
-      {/* Live Tracking Modal */}
-      <Modal
-        visible={showLiveTrackingModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLiveTrackingModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Live Journey Tracking</Text>
-              <TouchableOpacity onPress={() => setShowLiveTrackingModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.liveTrackingContent}>
-              <LottieView
-                ref={journeyAnimationRef}
-                source={require('../assets/animations/journey.json')}
-                autoPlay
-                loop
-                style={styles.liveAnimation}
-              />
-              
-              <View style={styles.liveTrackingInfo}>
-                <View style={styles.liveTrackingSegment}>
-                  <Text style={styles.liveTrackingTitle}>Current Segment</Text>
-                  <Text style={styles.liveTrackingSegmentName}>
-                    {journeyPlan?.segments[currentSegmentIndex]?.from} → {journeyPlan?.segments[currentSegmentIndex]?.to}
-                  </Text>
-                  <Text style={styles.liveTrackingBusInfo}>
-                    Bus {journeyPlan?.segments[currentSegmentIndex]?.busNumber} ({journeyPlan?.segments[currentSegmentIndex]?.type})
-                  </Text>
-                </View>
-                
-                <View style={styles.liveTrackingStats}>
-                  <View style={styles.liveTrackingStat}>
-                    <MaterialIcons name="access-time" size={16} color="#555" />
-                    <Text style={styles.liveStatLabel}>ETA:</Text>
-                    <Text style={styles.liveStatValue}>{estimatedTimeRemaining}</Text>
-                  </View>
-                  
-                  <View style={styles.liveTrackingStat}>
-                    <MaterialIcons name="speed" size={16} color="#555" />
-                    <Text style={styles.liveStatLabel}>Speed:</Text>
-                    <Text style={styles.liveStatValue}>48 km/h</Text>
-                  </View>
-                  
-                  <View style={styles.liveTrackingStat}>
-                    <MaterialIcons name="location-on" size={16} color="#555" />
-                    <Text style={styles.liveStatLabel}>Next Stop:</Text>
-                    <Text style={styles.liveStatValue}>{
-                      currentSegmentIndex < journeyPlan?.segments.length - 1 
-                        ? journeyPlan?.segments[currentSegmentIndex]?.stops[1] 
-                        : 'Final Destination'
-                    }</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.liveNotifications}>
-                  <View style={styles.notificationItem}>
-                    <MaterialIcons name="notifications" size={16} color={WARNING_COLOR} />
-                    <Text style={styles.notificationText}>Arrival in 5 minutes at next stop</Text>
-                  </View>
-                  
-                  <View style={styles.notificationItem}>
-                    <MaterialCommunityIcons name="weather-partly-cloudy" size={16} color="#FF9800" />
-                    <Text style={styles.notificationText}>Expect light rain at destination</Text>
-                  </View>
-                </View>
-              </View>
-              
-              <TouchableOpacity style={styles.shareJourneyButton}>
-                <LinearGradient
-                  colors={[THEME_COLOR, '#0d47a1']}
-                  style={styles.gradientButton}
-                >
-                  <Text style={styles.shareJourneyText}>Share My Journey</Text>
-                  <MaterialIcons name="share" size={18} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-      
-      {/* Frequent Locations Modal */}
-      <Modal
-        visible={showFrequentLocations}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowFrequentLocations(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Select {selectingFor === 'from' ? 'Starting Point' : 'Destination'}
-              </Text>
-              <TouchableOpacity onPress={() => setShowFrequentLocations(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <FlatList
-              data={FREQUENT_LOCATIONS}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.locationItem}
-                  onPress={() => selectFrequentLocation(item)}
-                >
-                  <MaterialIcons name="location-on" size={20} color={THEME_COLOR} />
-                  <View style={styles.locationDetails}>
-                    <Text style={styles.locationName}>{item.name}</Text>
-                    <Text style={styles.locationAddress}>{item.address}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color="#777" />
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </View>
-      </Modal>
-      
-      {/* Alternate Routes Modal */}
-      <Modal
-        visible={showAlternateRoutes}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowAlternateRoutes(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Alternate Routes</Text>
-              <TouchableOpacity onPress={() => setShowAlternateRoutes(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.alternateRoutesContent}>
-              <View style={[styles.alternateRoute, styles.currentRoute]}>
-                <View style={styles.alternateRouteHeader}>
-                  <Text style={styles.alternateRouteTitle}>Current Route</Text>
-                  <View style={styles.currentBadge}>
-                    <Text style={styles.currentBadgeText}>Active</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.alternateRouteDetails}>
-                  <View style={styles.alternateRouteDetail}>
-                    <MaterialIcons name="access-time" size={16} color="#555" />
-                    <Text style={styles.alternateRouteDetailText}>{journeyPlan.totalDuration}</Text>
-                  </View>
-                  <View style={styles.alternateRouteDetail}>
-                    <MaterialIcons name="attach-money" size={16} color="#555" />
-                    <Text style={styles.alternateRouteDetailText}>{journeyPlan.totalPrice}</Text>
-                  </View>
-                  <View style={styles.alternateRouteDetail}>
-                    <MaterialIcons name="multiple-stop" size={16} color="#555" />
-                    <Text style={styles.alternateRouteDetailText}>{journeyPlan.transfers} transfers</Text>
-                  </View>
-                </View>
-              </View>
-              
-              {journeyPlan.alternateRoutes.map((route, index) => (
-                <View key={index} style={styles.alternateRoute}>
-                  <View style={styles.alternateRouteHeader}>
-                    <Text style={styles.alternateRouteTitle}>{route.name}</Text>
-                  </View>
-                  
-                  <View style={styles.alternateRouteDetails}>
-                    <View style={styles.alternateRouteDetail}>
-                      <MaterialIcons name="access-time" size={16} color="#555" />
-                      <Text style={styles.alternateRouteDetailText}>{route.duration}</Text>
-                    </View>
-                    <View style={styles.alternateRouteDetail}>
-                      <MaterialIcons name="attach-money" size={16} color="#555" />
-                      <Text style={styles.alternateRouteDetailText}>{route.price}</Text>
-                    </View>
-                    <View style={styles.alternateRouteDetail}>
-                      <MaterialIcons name="multiple-stop" size={16} color="#555" />
-                      <Text style={styles.alternateRouteDetailText}>{route.transfers} transfers</Text>
-                    </View>
-                  </View>
-                  
-                  <Text style={styles.alternateRouteNote}>{route.note}</Text>
-                  
-                  <TouchableOpacity style={styles.switchRouteButton}>
-                    <Text style={styles.switchRouteText}>Switch to This Route</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
-      
-      {/* Travel Tips Modal */}
-      <Modal
-        visible={showTravelTips}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowTravelTips(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Travel Tips</Text>
-              <TouchableOpacity onPress={() => setShowTravelTips(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.tipsScrollView}>
-              <View style={styles.tipCategory}>
-                <Text style={styles.tipCategoryTitle}>Before Your Journey</Text>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="schedule" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Check bus schedules ahead of time, especially during peak hours</Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="account-balance-wallet" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Keep exact change ready for ticket purchases</Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="battery-charging-full" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Ensure your phone is fully charged before departure</Text>
-                </View>
-              </View>
-              
-              <View style={styles.tipCategory}>
-                <Text style={styles.tipCategoryTitle}>During Your Journey</Text>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="shopping-bag" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Keep your belongings secure and within sight</Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="map" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Download offline maps for your destination area</Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="notifications" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Enable journey notifications to get timely alerts</Text>
-                </View>
-              </View>
-              
-              <View style={styles.tipCategory}>
-                <Text style={styles.tipCategoryTitle}>Local Transport Etiquette</Text>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="accessibility" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Offer seats to elderly, pregnant women, and differently-abled passengers</Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="volume-up" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Keep noise levels down during the journey</Text>
-                </View>
-                <View style={styles.tipItem}>
-                  <MaterialIcons name="delete" size={16} color={THEME_COLOR} />
-                  <Text style={styles.tipItemText}>Take all your trash with you when leaving the bus</Text>
-                </View>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1103,6 +755,158 @@ const JourneyPlannerScreen = () => {
         onMenuItemPress={handleMenuItemPress}
         onSignOut={handleSignOut}
       />
+
+      <Modal
+        visible={showScheduleModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowScheduleModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Bus Schedule</Text>
+              <TouchableOpacity onPress={() => setShowScheduleModal(false)}>
+                <MaterialIcons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.scheduleList}>
+              {selectedRoute?.departures?.map((departure, index) => (
+                <View key={index} style={styles.scheduleItem}>
+                  <View style={styles.scheduleTimes}>
+                    <View style={styles.scheduleTimeBlock}>
+                      <Text style={styles.scheduleTimeLabel}>Departure</Text>
+                      <Text style={styles.scheduleTime}>{departure}</Text>
+                    </View>
+                    <MaterialIcons name="arrow-forward" size={20} color="#777" />
+                    <View style={styles.scheduleTimeBlock}>
+                      <Text style={styles.scheduleTimeLabel}>Arrival</Text>
+                      <Text style={styles.scheduleTime}>N/A</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.scheduleBookButton}>
+                    <Text style={styles.scheduleBookText}>Book</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.viewAllButton}>
+              <Text style={styles.viewAllText}>View All Schedules</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showLiveTrackingModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLiveTrackingModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Live Journey Tracking</Text>
+              <TouchableOpacity onPress={() => setShowLiveTrackingModal(false)}>
+                <MaterialIcons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.liveTrackingContent}>
+              <LottieView
+                ref={journeyAnimationRef}
+                source={require('../assets/animations/journey.json')}
+                autoPlay
+                loop
+                style={styles.liveAnimation}
+              />
+
+              <View style={styles.liveTrackingInfo}>
+                <View style={styles.liveTrackingSegment}>
+                  <Text style={styles.liveTrackingTitle}>Current Segment</Text>
+                  <Text style={styles.liveTrackingSegmentName}>
+                    {selectedRoute?.segments[0]?.from} → {selectedRoute?.segments[0]?.to}
+                  </Text>
+                  <Text style={styles.liveTrackingBusInfo}>
+                    {selectedRoute?.segments[0]?.mode} {selectedRoute?.segments[0]?.busNumber} ({selectedRoute?.segments[0]?.type})
+                  </Text>
+                </View>
+
+                <View style={styles.liveTrackingStats}>
+                  <View style={styles.liveTrackingStat}>
+                    <MaterialIcons name="access-time" size={16} color="#555" />
+                    <Text style={styles.liveStatLabel}>ETA:</Text>
+                    <Text style={styles.liveStatValue}>{estimatedTimeRemaining}</Text>
+                  </View>
+
+                  <View style={styles.liveTrackingStat}>
+                    <MaterialIcons name="speed" size={16} color="#555" />
+                    <Text style={styles.liveStatLabel}>Speed:</Text>
+                    <Text style={styles.liveStatValue}>48 km/h</Text>
+                  </View>
+
+                  <View style={styles.liveTrackingStat}>
+                    <MaterialIcons name="location-on" size={16} color="#555" />
+                    <Text style={styles.liveStatLabel}>Next Stop:</Text>
+                    <Text style={styles.liveStatValue}>
+                      {selectedRoute?.segments[0]?.stops[1] || 'Final Destination'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.liveNotifications}>
+                  <View style={styles.notificationItem}>
+                    <MaterialIcons name="notifications" size={16} color={WARNING_COLOR} />
+                    <Text style={styles.notificationText}>Arrival in 5 minutes at next stop</Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.shareJourneyButton}>
+                <LinearGradient
+                  colors={[THEME_COLOR, '#0d47a1']}
+                  style={styles.gradientButton}
+                >
+                  <Text style={styles.shareJourneyText}>Share My Journey</Text>
+                  <MaterialIcons name="share" size={18} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showTravelTips}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowTravelTips(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Travel Tips</Text>
+              <TouchableOpacity onPress={() => setShowTravelTips(false)}>
+                <MaterialIcons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.tipsScrollView}>
+              <View style={styles.tipCategory}>
+                <Text style={styles.tipCategoryTitle}>Journey-Specific Tips</Text>
+                {detailedTravelTips.map((tip, index) => (
+                  <View key={index} style={styles.tipItem}>
+                    <MaterialIcons name="lightbulb-outline" size={16} color={THEME_COLOR} />
+                    <Text style={styles.tipItemText}>{tip}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1143,8 +947,6 @@ const styles = StyleSheet.create({
   headerActionButton: {
     padding: 4,
   },
-
-  // Start Screen Styles
   startScreen: {
     flex: 1,
     justifyContent: 'center',
@@ -1172,15 +974,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 8,
   },
-
-  // Planner Container Styles
   plannerContainer: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
-  },
-  topDestinationsContainer: {
-    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -1188,29 +985,6 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
-  popularRoutes: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  popularRoute: {
-    marginRight: 12,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  popularRouteGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  popularRouteText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-
-  // Location Inputs Styles
   locationInputsContainer: {
     marginBottom: 16,
   },
@@ -1317,10 +1091,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  
-  // Journey Container Styles
   journeyContainer: {
     flex: 1,
+  },
+  routeSelectorContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  routeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 16,
+    backgroundColor: '#f5f5f5',
+  },
+  activeRouteButton: {
+    backgroundColor: '#1976d2',
+  },
+  routeButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  activeRouteButtonText: {
+    color: '#fff',
+  },
+  routeReason: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 4,
   },
   mapContainer: {
     height: height * 0.3,
@@ -1376,8 +1178,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
   },
-
-  // Journey Summary Styles
   journeySummaryContainer: {
     backgroundColor: '#fff',
     padding: 12,
@@ -1454,8 +1254,6 @@ const styles = StyleSheet.create({
     color: '#777',
     textAlign: 'right',
   },
-
-  // Roadmap Container Styles
   roadmapContainer: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -1500,10 +1298,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginTop: 2,
   },
-  transferDot: {
-    marginRight: 8,
-    marginTop: 2,
-  },
   segmentTitle: {
     fontSize: 15,
     fontWeight: '600',
@@ -1531,6 +1325,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#555',
   },
+  segmentReason: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 4,
+  },
   busNumberButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1539,7 +1338,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
   },
-  busNumber: {
+  buserylNumber: {
     fontSize: 14,
     fontWeight: '500',
     color: '#1976d2',
@@ -1589,22 +1388,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#555',
   },
-  waitingTimeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff3e0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  waitingTime: {
-    fontSize: 12,
-    color: '#ff9800',
-    marginLeft: 4,
-  },
-
-  // Action Bar Styles
   actionBar: {
     backgroundColor: '#fff',
     padding: 12,
@@ -1630,18 +1413,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  alternateRoutesButton: {
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  alternateRoutesText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-    marginRight: 8,
-  },
-
-  // Modal Container Styles
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1666,8 +1437,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-
-  // Bus Schedule Modal Styles
   scheduleList: {
     padding: 16,
   },
@@ -1716,8 +1485,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-
-  // Live Tracking Modal Styles
   liveTrackingContent: {
     padding: 16,
   },
@@ -1794,103 +1561,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 8,
   },
-
-  // Frequent Locations Modal Styles
-  locationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  locationDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  locationName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 2,
-  },
-  locationAddress: {
-    fontSize: 14,
-    color: '#777',
-  },
-
-  // Alternate Routes Modal Styles
-  alternateRoutesContent: {
-    padding: 16,
-  },
-  alternateRoute: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  currentRoute: {
-    backgroundColor: '#e3f2fd',
-    borderWidth: 1,
-    borderColor: '#1976d2',
-  },
-  alternateRouteHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  alternateRouteTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  currentBadge: {
-    backgroundColor: '#1976d2',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  currentBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  alternateRouteDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  alternateRouteDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-    marginBottom: 8,
-  },
-  alternateRouteDetailText: {
-    fontSize: 14,
-    color: '#555',
-    marginLeft: 4,
-  },
-  alternateRouteNote: {
-    fontSize: 14,
-    color: '#777',
-    fontStyle: 'italic',
-    marginBottom: 12,
-  },
-  switchRouteButton: {
-    backgroundColor: '#1976d2',
-    paddingVertical: 8,
-    borderRadius: 4,
-    alignItems: 'center',
-  },
-  switchRouteText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  // Travel Tips Modal Styles
   tipsScrollView: {
     padding: 16,
   },
@@ -1914,8 +1584,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
-
-  // Marker Styles
   markerContainer: {
     backgroundColor: '#1976d2',
     borderRadius: 20,
@@ -1928,6 +1596,5 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.2 }],
   },
 });
-
 
 export default JourneyPlannerScreen;

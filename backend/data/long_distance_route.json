@@ -1,0 +1,255 @@
+[
+  {
+    "route": "Erode to Edappadi",
+    "travel_time": "01:30 hrs",
+    "bus_stops": ["Sankagiri"],
+    "departures_from_erode": ["08:30", "20:30", "21:45"]
+  },
+  {
+    "route": "Erode to Omalur",
+    "travel_time": "02:00 hrs",
+    "bus_stops": ["Sankagiri", "Tharamangalam"],
+    "departures_from_erode": ["06:10", "06:30", "06:45", "08:45", "09:10", "09:30", "10:30", "11:00", "13:40", "14:00", "14:17", "15:00", "16:30", "16:45", "16:50", "18:50", "19:30", "20:30"]
+  },
+  {
+    "route": "Erode to Kavundapadi",
+    "travel_time": "01:00 hrs",
+    "bus_stops": [],
+    "departures_from_erode": ["every 15-20 mins"]
+  },
+  {
+    "route": "Erode to Gobichettipalayam",
+    "travel_time": "01:30 hrs",
+    "bus_stops": ["Kavindapadi"],
+    "departures_from_erode": ["06:50", "08:15", "09:00", "12:30", "14:45", "16:00", "16:15", "17:30", "18:30", "18:40", "19:00", "20:00", "20:30", "21:00", "21:20", "21:45", "22:00", "22:20"]
+  },
+  {
+    "route": "Erode to Sathyamangalam",
+    "travel_time": "00:45 hrs",
+    "bus_stops": ["Gobichettipalayam"],
+    "departures_from_erode": ["00:15", "01:20", "02:45", "04:15", "05:00", "every 15-20 mins", "20:40", "21:00", "21:10"]
+  },
+  {
+    "route": "Erode to Bannari",
+    "travel_time": "02:00 hrs",
+    "bus_stops": ["Kavindapadi", "Sathyamangalam"],
+    "departures_from_erode": ["07:20", "15:30"]
+  },
+  {
+    "route": "Erode to Thalavadi",
+    "travel_time": "04:00 hrs",
+    "bus_stops": ["Sathyamangalam", "Hasanur"],
+    "departures_from_erode": ["07:20", "10:30", "10:50", "13:00", "17:45"]
+  },
+  {
+    "route": "Erode to Bhavani",
+    "travel_time": "00:40 hrs",
+    "bus_stops": [],
+    "departures_from_erode": ["every 15-20 mins"]
+  },
+  {
+    "route": "Erode to Chennampatti",
+    "travel_time": "02:00 hrs",
+    "bus_stops": ["Bhavani", "Mylambadi"],
+    "departures_from_erode": ["06:00", "08:20", "09:10", "13:00", "16:30", "20:00"]
+  },
+  {
+    "route": "Erode to Anthiyur",
+    "travel_time": "01:15 hrs",
+    "bus_stops": ["Bhavani"],
+    "departures_from_erode": ["00:45", "01:40", "03:15", "04:00", "04:30", "06:00", "06:20", "06:45", "07:00", "08:50", "10:00", "12:00", "14:15", "16:00", "16:40", "16:50", "17:20", "19:10", "20:20", "21:15", "21:30", "21:50", "22:00", "22:20", "22:45", "23:00", "23:15", "23:30"]
+  },
+  {
+    "route": "Erode to Mettur",
+    "travel_time": "01:30 hrs",
+    "bus_stops": ["Bhavani"],
+    "departures_from_erode": ["every 20-30 mins"]
+  },
+  {
+    "route": "Erode to Koilur",
+    "travel_time": "00:45 hrs",
+    "bus_stops": [],
+    "departures_from_erode": ["06:30", "10:00", "13:20", "17:00", "20:45"]
+  },
+  {
+    "route": "Erode to Nambiyur",
+    "travel_time": "01:45 hrs",
+    "bus_stops": [],
+    "departures_from_erode": ["20:15", "20:40"]
+  },
+  {
+    "route": "Erode to Kolathur",
+    "travel_time": "02:30 hrs",
+    "bus_stops": ["Bhavani", "Mettur"],
+    "departures_from_erode": ["09:40"]
+  },
+  {
+    "route": "Erode to Dharmapuri",
+    "travel_time": "03:30 hrs",
+    "bus_stops": ["Mettur"],
+    "departures_from_erode": ["01:30", "06:00", "10:30", "12:20", "12:30", "13:40", "14:00", "17:00", "20:45"]
+  },
+  {
+    "route": "Erode to Krishnagiri",
+    "travel_time": "05:00 hrs",
+    "bus_stops": ["Bhavani", "Mettur", "Dharmapuri"],
+    "departures_from_erode": ["10:00", "13:00"]
+  },
+  {
+    "route": "Erode to Sankagiri",
+    "travel_time": "00:45 hrs",
+    "bus_stops": [],
+    "departures_from_erode": ["04:40", "06:50", "09:00", "11:00", "11:15", "11:30", "11:50", "13:00", "14:50", "15:10", "17:05", "19:20", "20:50", "21:15", "21:20"]
+  },
+  {
+    "route": "Erode to Jalakandapuram",
+    "travel_time": "02:00 hrs",
+    "bus_stops": ["Sankagiri", "Edappadi"],
+    "departures_from_erode": ["15:45"]
+  },
+  {
+    "route": "Erode to Nangavalli",
+    "travel_time": "02:00 hrs",
+    "bus_stops": ["Sankagiri", "Edappadi"],
+    "departures_from_erode": ["08:40", "13:45", "17:50"]
+  },
+  {
+    "route": "Erode to Attur",
+    "travel_time": "04:00 hrs",
+    "bus_stops": ["Tiruchengode", "Rasipuram"],
+    "departures_from_erode": ["06:30", "08:00", "09:45", "14:00", "14:15", "17:40", "19:40"]
+  },
+  {
+    "route": "Erode to Kallakurichi",
+    "travel_time": "05:30 hrs",
+    "bus_stops": ["Tiruchengode", "Rasipuram", "Attur", "Chinnasalem"],
+    "departures_from_erode": ["08:00", "10:15", "11:30", "12:10", "12:30", "12:50", "13:30", "15:00", "15:20", "16:30", "17:50"]
+  },
+  {
+    "route": "Erode to Rasipuram",
+    "travel_time": "02:00 hrs",
+    "bus_stops": ["Tiruchengode"],
+    "departures_from_erode": ["05:15", "05:45", "06:50", "08:00", "08:20", "08:30", "09:00", "10:00", "10:20", "10:30", "15:15", "15:30", "15:45", "16:50", "18:00", "18:50", "19:00", "19:15", "19:30", "20:20", "21:00", "22:15", "22:40"]
+  },
+  {
+    "route": "Erode to Thammampatti",
+    "travel_time": "02:30 hrs",
+    "bus_stops": ["Tiruchengode", "Rasipuram"],
+    "departures_from_erode": ["19:45"]
+  },
+  {
+    "route": "Erode to Tharamangalam",
+    "travel_time": "01:45 hrs",
+    "bus_stops": ["Sankagiri"],
+    "departures_from_erode": ["12:20", "21:30"]
+  },
+  {
+    "route": "Erode to Namakkal",
+    "travel_time": "01:45 hrs",
+    "bus_stops": ["Tiruchengode"],
+    "departures_from_erode": ["every 20-30 mins"]
+  },
+  {
+    "route": "Erode to Thuraiyur",
+    "travel_time": "03:30 hrs",
+    "bus_stops": ["Namakkal"],
+    "departures_from_erode": ["04:45", "07:00", "07:50", "09:20", "12:15", "12:45", "13:40", "14:30", "15:20", "16:45"]
+  },
+  {
+    "route": "Erode to Ponnamaravathi",
+    "travel_time": "08:00 hrs",
+    "bus_stops": ["Tiruchengode", "Namakkal", "Musiri", "Kulithalai", "Manapparai"],
+    "departures_from_erode": ["12:50"]
+  },
+  {
+    "route": "Tiruppur to Madurai",
+    "travel_time": "04:00 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti"],
+    "departures_from_tiruppur": ["every 20-30 mins"],
+    "ac_bus_timings": ["00:30", "06:20", "08:40", "10:30", "13:00", "13:30", "14:30", "20:45", "22:00"]
+  },
+  {
+    "route": "Tiruppur to Sivakasi",
+    "travel_time": "06:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Madurai"],
+    "departures_from_tiruppur": ["09:00", "11:00", "12:20", "14:15", "17:45", "21:20"]
+  },
+  {
+    "route": "Tiruppur to Aruppukottai",
+    "travel_time": "06:00 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti", "Madurai"],
+    "departures_from_tiruppur": ["07:20", "19:30", "23:00"]
+  },
+  {
+    "route": "Tiruppur to Tuticorin",
+    "travel_time": "08:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti", "Madurai", "Aruppukottai"],
+    "departures_from_tiruppur": ["13:30", "15:30", "23:15"]
+  },
+  {
+    "route": "Tiruppur to Thiruchendur",
+    "travel_time": "09:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti", "Madurai", "Tuticorin"],
+    "departures_from_tiruppur": ["08:40", "10:20", "20:40", "21:45", "22:20"]
+  },
+  {
+    "route": "Tiruppur to Paramakudi",
+    "travel_time": "08:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti", "Madurai"],
+    "departures_from_tiruppur": ["12:00", "22:30", "23:00"]
+  },
+  {
+    "route": "Tiruppur to Sayalgudi",
+    "travel_time": "08:00 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti", "Madurai", "Paramakudi", "Muthukulathur"],
+    "departures_from_tiruppur": ["08:00"]
+  },
+  {
+    "route": "Tiruppur to Rameswaram",
+    "travel_time": "08:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Vadipatti", "Madurai", "Paramakudi", "Ramanathapuram"],
+    "departures_from_tiruppur": ["06:00", "10:00", "20:50", "23:00"]
+  },
+  {
+    "route": "Tiruppur to Rajapalayam",
+    "travel_time": "07:00 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Madurai", "Srivilliputhur"],
+    "departures_from_tiruppur": ["12:40", "15:00"]
+  },
+  {
+    "route": "Tiruppur to Sankarankovil",
+    "travel_time": "07:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Madurai", "Srivilliputhur", "Rajapalayam"],
+    "departures_from_tiruppur": ["10:45"]
+  },
+  {
+    "route": "Tiruppur to Alangulam",
+    "travel_time": "08:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Madurai", "Srivilliputhur", "Rajapalayam", "Sankarankovil", "Surandai"],
+    "departures_from_tiruppur": ["21:15"]
+  },
+  {
+    "route": "Tiruppur to Tirunelveli",
+    "travel_time": "08:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Madurai"],
+    "departures_from_tiruppur": ["00:00", "05:30", "16:00", "17:20"]
+  },
+  {
+    "route": "Tiruppur to Nagercoil",
+    "travel_time": "09:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Madurai", "Tirunelveli"],
+    "departures_from_tiruppur": ["02:00", "09:00", "11:20", "17:30", "20:00", "21:00"]
+  },
+  {
+    "route": "Tiruppur to Bodi",
+    "travel_time": "05:00 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Batlagundu", "Periyakulam", "Theni"],
+    "departures_from_tiruppur": ["11:45", "15:40", "20:10", "23:45"]
+  },
+  {
+    "route": "Tiruppur to Thevaram",
+    "travel_time": "05:30 hrs",
+    "bus_stops": ["Dharapuram", "Oddanchatram", "Sempatty", "Batlagundu", "Periyakulam", "Theni", "Bodi"],
+    "departures_from_tiruppur": ["05:30", "18:00", "21:30"]
+  }
+]
