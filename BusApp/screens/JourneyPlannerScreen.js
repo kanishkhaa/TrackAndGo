@@ -46,7 +46,7 @@ const JourneyPlannerScreen = () => {
   const [toLocation, setToLocation] = useState('');
   const [journeyPlan, setJourneyPlan] = useState(null);
   const [alternateRoutes, setAlternateRoutes] = useState([]);
-  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0); // 0 for primary, 1+ for alternates
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('journey');
@@ -57,19 +57,22 @@ const JourneyPlannerScreen = () => {
   const [showLiveTrackingModal, setShowLiveTrackingModal] = useState(false);
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState('');
   const [showTravelTips, setShowTravelTips] = useState(false);
-  const [travelTips, setTravelTips] = useState([
-    'Book tickets in advance during peak hours',
-    'Keep small change ready for bus fare',
-  ]);
   const [detailedTravelTips, setDetailedTravelTips] = useState([]);
   const [routeProgress, setRouteProgress] = useState(0);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [isRoadmapFullScreen, setIsRoadmapFullScreen] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState({
+    journeySpecific: true,
+    general: true,
+  });
 
   // Animated values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(-300))[0];
   const progressAnim = useState(new Animated.Value(0))[0];
   const pulseAnim = useState(new Animated.Value(1))[0];
+  const cardScaleAnims = detailedTravelTips.map(() => new Animated.Value(1));
 
   useEffect(() => {
     if (user.role === 'driver' && !user.profileComplete) {
@@ -93,10 +96,6 @@ const JourneyPlannerScreen = () => {
           latitudeDelta: 0.03,
           longitudeDelta: 0.03,
         });
-
-        // Fetch generic travel tips based on current location
-        const tips = await generateTravelTips('Current Location', 'Nearby Destinations', {});
-        setTravelTips(tips);
       } catch (error) {
         setLocationError('Failed to fetch location');
       }
@@ -272,7 +271,6 @@ const JourneyPlannerScreen = () => {
         departures: route.departures_from_start,
       };
 
-      // Fetch alternate routes
       const alternateRoutesRaw = await generateAlternateRoutes(fromLocation, toLocation, primaryJourneyPlan);
       const alternateJourneyPlans = await Promise.all(
         alternateRoutesRaw.map(async (altRoute, index) => {
@@ -282,7 +280,7 @@ const JourneyPlannerScreen = () => {
           const altCoordinates = altCoordinatesResults.filter(coord => coord !== null);
 
           if (altCoordinates.length < 2) {
-            return null; // Skip invalid routes
+            return null;
           }
 
           const [altHours, altMinutes] = altRoute.travelTime.replace('h ', ':').replace('m', '').split(':').map(Number);
@@ -295,8 +293,8 @@ const JourneyPlannerScreen = () => {
               busNumber: `ALT-${index + 1}`,
               type: altRoute.mode,
               duration: altRoute.travelTime,
-              eta: 'N/A', // Placeholder, can be enhanced with real data
-              price: '₹550', // Placeholder, adjust as needed
+              eta: 'N/A',
+              price: '₹550',
               occupancy: '45%',
               amenities: ['AC'],
               coordinates: altCoordinates,
@@ -309,7 +307,7 @@ const JourneyPlannerScreen = () => {
             transfers: altRoute.stops.length,
             carbonFootprint: '4.5 kg CO₂',
             totalMinutes: altTotalMinutes,
-            departures: [], // Placeholder
+            departures: [],
           };
         })
       );
@@ -320,12 +318,11 @@ const JourneyPlannerScreen = () => {
       setAlternateRoutes(validAlternateRoutes);
       setSelectedRouteIndex(0);
 
-      // Fetch AI-generated travel tips
       const tips = await generateTravelTips(fromLocation, toLocation, {
         duration: route.travel_time,
         stops: route.bus_stops,
       });
-      setTravelTips(tips);
+      setDetailedTravelTips(tips);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -337,17 +334,22 @@ const JourneyPlannerScreen = () => {
   const selectRoute = (index) => {
     setSelectedRouteIndex(index);
     const selectedJourney = index === 0 ? journeyPlan : alternateRoutes[index - 1];
-    setEstimatedTimeRemaining(selectedJourney.totalDuration);
-    if (mapRef.current && selectedJourney?.segments?.[0]?.coordinates) {
-      mapRef.current.fitToCoordinates(selectedJourney.segments[0].coordinates, {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
-      });
+    if (selectedJourney) {
+      setEstimatedTimeRemaining(selectedJourney.totalDuration);
+      if (mapRef.current && selectedJourney?.segments?.[0]?.coordinates) {
+        mapRef.current.fitToCoordinates(selectedJourney.segments[0].coordinates, {
+          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+          animated: true,
+        });
+      }
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const startJourney = () => {
+    const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
+    if (!selectedJourney) return;
+
     setTrackingJourney(true);
     setShowStartScreen(false);
 
@@ -355,7 +357,6 @@ const JourneyPlannerScreen = () => {
       journeyAnimationRef.current.play();
     }
 
-    const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
     if (mapRef.current && selectedJourney?.segments?.[0]?.coordinates) {
       mapRef.current.fitToCoordinates(selectedJourney.segments[0].coordinates, {
         edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
@@ -369,9 +370,47 @@ const JourneyPlannerScreen = () => {
 
   const showBusSchedule = () => {
     const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
-    setSelectedRoute(selectedJourney);
-    setShowScheduleModal(true);
+    if (selectedJourney) {
+      setSelectedRoute(selectedJourney);
+      setShowScheduleModal(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const toggleRoadmapModal = () => {
+    setShowRoadmapModal(!showRoadmapModal);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const toggleRoadmapFullScreen = () => {
+    setIsRoadmapFullScreen(!isRoadmapFullScreen);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category],
+    }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const animateCardPressIn = (index) => {
+    Animated.spring(cardScaleAnims[index], {
+      toValue: 0.95,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animateCardPressOut = (index) => {
+    Animated.spring(cardScaleAnims[index], {
+      toValue: 1,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
   };
 
   const renderStartScreen = () => (
@@ -467,26 +506,47 @@ const JourneyPlannerScreen = () => {
             scrollEnabled={true}
             zoomEnabled={true}
           />
+          <TouchableOpacity
+            style={styles.travelTipsButton}
+            onPress={() => {
+              setShowTravelTips(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }}
+          >
+            <LinearGradient
+              colors={[THEME_COLOR, '#0d47a1']}
+              style={styles.gradientButton}
+            >
+              <MaterialIcons name="lightbulb-outline" size={18} color="#fff" />
+              <Text style={styles.travelTipsButtonText}>Travel Tips</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       )}
-
-      <View style={styles.tipsContainer}>
-        <Text style={styles.tipsTitle}>Travel Tips</Text>
-        {travelTips.map((tip, index) => (
-          <Text key={index} style={styles.tipText}>• {tip}</Text>
-        ))}
-        <TouchableOpacity
-          style={styles.showMoreTips}
-          onPress={() => setShowTravelTips(true)}
-        >
-          <Text style={styles.showMoreTipsText}>Show More Tips</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 
   const renderJourneyPlan = () => {
     const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
+
+    if (!selectedJourney) {
+      return (
+        <View style={styles.fallbackContainer}>
+          <Text style={styles.fallbackText}>No journey selected. Please plan a journey first.</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setShowStartScreen(true)}
+          >
+            <LinearGradient
+              colors={[THEME_COLOR, '#0d47a1']}
+              style={styles.gradientButton}
+            >
+              <Text style={styles.backButtonText}>Back to Planner</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.journeyContainer}>
@@ -497,7 +557,7 @@ const JourneyPlannerScreen = () => {
               onPress={() => selectRoute(0)}
             >
               <Text style={[styles.routeButtonText, selectedRouteIndex === 0 && styles.activeRouteButtonText]}>
-                Primary Route ({journeyPlan?.totalDuration})
+                Primary Route ({journeyPlan?.totalDuration || 'N/A'})
               </Text>
             </TouchableOpacity>
             {alternateRoutes.map((route, index) => (
@@ -525,7 +585,7 @@ const JourneyPlannerScreen = () => {
               showsUserLocation={true}
               showsMyLocationButton={true}
             >
-              {selectedJourney?.segments?.[0]?.coordinates?.map((coord, index) => (
+              {selectedJourney.segments[0].coordinates?.map((coord, index) => (
                 <Marker
                   key={index}
                   coordinate={coord}
@@ -543,7 +603,7 @@ const JourneyPlannerScreen = () => {
                   </View>
                 </Marker>
               ))}
-              {selectedJourney?.segments?.[0]?.coordinates && (
+              {selectedJourney.segments[0].coordinates && (
                 <Polyline
                   coordinates={selectedJourney.segments[0].coordinates}
                   strokeColor={trackingJourney ? ACCENT_COLOR : THEME_COLOR}
@@ -575,7 +635,9 @@ const JourneyPlannerScreen = () => {
         <View style={styles.journeySummaryContainer}>
           <View style={styles.journeyHeaderContainer}>
             <View>
-              <Text style={styles.journeyTitle}>{selectedJourney.segments[0].from} → {selectedJourney.segments[0].to}</Text>
+              <Text style={styles.journeyTitle}>
+                {selectedJourney.segments[0].from} → {selectedJourney.segments[0].to}
+              </Text>
               <View style={styles.journeyStats}>
                 <MaterialIcons name="access-time" size={14} color="#555" />
                 <Text style={styles.journeyStatText}>{selectedJourney.totalDuration}</Text>
@@ -624,88 +686,24 @@ const JourneyPlannerScreen = () => {
           )}
         </View>
 
-        <View style={styles.roadmapContainer}>
-          <Text style={styles.roadmapTitle}>Your Journey Roadmap</Text>
-          <ScrollView style={styles.roadmap}>
-            {selectedJourney.segments.map((segment, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.segment,
-                  trackingJourney && index === currentSegmentIndex && styles.activeSegment,
-                ]}
-              >
-                <View style={styles.segmentHeader}>
-                  <View style={styles.segmentTitleContainer}>
-                    <View style={styles.startDot}>
-                      <MaterialIcons name="trip-origin" size={16} color={THEME_COLOR} />
-                    </View>
-                    <View>
-                      <Text style={styles.segmentTitle}>
-                        {segment.from} → {segment.to}
-                      </Text>
-                      <View style={styles.segmentBadges}>
-                        <View style={[styles.badge, styles.typeBadge]}>
-                          <Text style={styles.badgeText}>{segment.type}</Text>
-                        </View>
-                        {segment.amenities.map((amenity, i) => (
-                          <View key={i} style={[styles.badge, styles.amenityBadge]}>
-                            <Text style={styles.badgeText}>{amenity}</Text>
-                          </View>
-                        ))}
-                      </View>
-                      {segment.reason && (
-                        <Text style={styles.segmentReason}>{segment.reason}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.busNumberButton}
-                    onPress={() => showBusSchedule()}
-                  >
-                    <Text style={styles.busNumber}>{segment.mode} {segment.busNumber}</Text>
-                    <MaterialIcons name="schedule" size={14} color={THEME_COLOR} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.segmentDetails}>
-                  <View style={styles.segmentDetail}>
-                    <MaterialIcons name="access-time" size={14} color="#555" />
-                    <Text style={styles.segmentInfo}>{segment.duration}</Text>
-                  </View>
-                  <View style={styles.segmentDetail}>
-                    <MaterialIcons name="attach-money" size={14} color="#555" />
-                    <Text style={styles.segmentInfo}>{segment.price}</Text>
-                  </View>
-                  <View style={styles.segmentDetail}>
-                    <MaterialIcons name="people" size={14} color="#555" />
-                    <Text style={styles.segmentInfo}>Occupancy: {segment.occupancy}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.stopsContainer}>
-                  <Text style={styles.stopsTitle}>Stops:</Text>
-                  <View style={styles.stopsList}>
-                    {segment.stops.map((stop, i) => (
-                      <View key={i} style={styles.stopItem}>
-                        <View style={styles.stopDot} />
-                        <Text style={styles.stopText}>{stop}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-
         <View style={styles.actionBar}>
           <View style={styles.journeyInfoContainer}>
             <View style={styles.infoItem}>
               <MaterialCommunityIcons name="leaf" size={18} color="#4CAF50" />
               <Text style={styles.infoText}>{selectedJourney.carbonFootprint}</Text>
             </View>
+            <TouchableOpacity
+              style={styles.roadmapButton}
+              onPress={toggleRoadmapModal}
+            >
+              <LinearGradient
+                colors={[THEME_COLOR, '#0d47a1']}
+                style={styles.gradientButtonSmall}
+              >
+                <MaterialIcons name="map" size={16} color="#fff" />
+                <Text style={styles.roadmapButtonText}>View Roadmap</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
 
           {!trackingJourney && (
@@ -727,6 +725,407 @@ const JourneyPlannerScreen = () => {
     );
   };
 
+  const renderRoadmapModal = () => {
+    const selectedJourney = selectedRouteIndex === 0 ? journeyPlan : alternateRoutes[selectedRouteIndex - 1];
+
+    if (!selectedJourney) {
+      return (
+        <Modal
+          visible={showRoadmapModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={toggleRoadmapModal}
+        >
+          <View style={styles.modalContainer}>
+            <View style={[styles.roadmapModalContent, isRoadmapFullScreen && styles.fullScreenModalContent]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Journey Roadmap</Text>
+                <View style={styles.modalHeaderActions}>
+                  <TouchableOpacity onPress={toggleRoadmapFullScreen} style={styles.modalActionButton}>
+                    <MaterialIcons
+                      name={isRoadmapFullScreen ? "fullscreen-exit" : "fullscreen"}
+                      size={24}
+                      color="#333"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={toggleRoadmapModal} style={styles.modalActionButton}>
+                    <MaterialIcons name="close" size={24} color="#333" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.fallbackContainer}>
+                <Text style={styles.fallbackText}>No journey selected.</Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      );
+    }
+
+    return (
+      <Modal
+        visible={showRoadmapModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={toggleRoadmapModal}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.roadmapModalContent, isRoadmapFullScreen && styles.fullScreenModalContent]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Journey Roadmap</Text>
+              <View style={styles.modalHeaderActions}>
+                <TouchableOpacity onPress={toggleRoadmapFullScreen} style={styles.modalActionButton}>
+                  <MaterialIcons
+                    name={isRoadmapFullScreen ? "fullscreen-exit" : "fullscreen"}
+                    size={24}
+                    color="#333"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={toggleRoadmapModal} style={styles.modalActionButton}>
+                  <MaterialIcons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <ScrollView style={styles.roadmap}>
+              {selectedJourney.segments.map((segment, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.segment,
+                    trackingJourney && index === currentSegmentIndex && styles.activeSegment,
+                  ]}
+                >
+                  <View style={styles.segmentHeader}>
+                    <View style={styles.segmentTitleContainer}>
+                      <MaterialIcons name="trip-origin" size={20} color={THEME_COLOR} style={styles.startDot} />
+                      <View>
+                        <Text style={styles.segmentTitle}>
+                          {segment.from} → {segment.to}
+                        </Text>
+                        <Text style={styles.segmentSubtitle}>
+                          {segment.mode} {segment.busNumber} • {segment.type}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.busScheduleButton}
+                      onPress={() => {
+                        toggleRoadmapModal();
+                        showBusSchedule();
+                      }}
+                    >
+                      <LinearGradient
+                        colors={[THEME_COLOR, '#0d47a1']}
+                        style={styles.gradientButtonSmall}
+                      >
+                        <MaterialIcons name="schedule" size={16} color="#fff" />
+                        <Text style={styles.busScheduleButtonText}>Schedule</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.segmentBadges}>
+                    {segment.amenities.map((amenity, i) => (
+                      <View key={i} style={styles.amenityBadge}>
+                        <Text style={styles.badgeText}>{amenity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {segment.reason && (
+                    <Text style={styles.segmentReason}>Note: {segment.reason}</Text>
+                  )}
+
+                  <View style={styles.segmentDetails}>
+                    <View style={styles.segmentDetail}>
+                      <MaterialIcons name="access-time" size={16} color="#666" />
+                      <Text style={styles.segmentInfo}>{segment.duration}</Text>
+                    </View>
+                    <View style={styles.segmentDetail}>
+                      <MaterialIcons name="attach-money" size={16} color="#666" />
+                      <Text style={styles.segmentInfo}>{segment.price}</Text>
+                    </View>
+                    <View style={styles.segmentDetail}>
+                      <MaterialIcons name="people" size={16} color="#666" />
+                      <Text style={styles.segmentInfo}>{segment.occupancy}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stopsContainer}>
+                    <Text style={styles.stopsTitle}>Stops</Text>
+                    <View style={styles.stopsList}>
+                      {segment.stops.map((stop, i) => (
+                        <View key={i} style={styles.stopItem}>
+                          <View style={styles.stopDot} />
+                          <Text style={styles.stopText}>{stop}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const renderTravelTipsModal = () => (
+    <Modal
+      visible={showTravelTips}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowTravelTips(false)}
+    >
+      <View style={styles.tipsModalContainer}>
+        <LinearGradient
+          colors={[THEME_COLOR, '#0d47a1']}
+          style={styles.tipsModalHeader}
+        >
+          <View style={styles.tipsHeaderContent}>
+            <LottieView
+              source={require('../assets/animations/travel-tips.json')}
+              autoPlay
+              loop
+              style={styles.tipsHeaderAnimation}
+            />
+            <Text style={styles.tipsModalTitle}>Travel Tips</Text>
+            <TouchableOpacity
+              style={styles.tipsCloseButton}
+              onPress={() => setShowTravelTips(false)}
+            >
+              <MaterialIcons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+
+        <ScrollView style={styles.tipsContent}>
+          <View style={styles.tipCategoryContainer}>
+            <TouchableOpacity
+              style={styles.tipCategoryHeader}
+              onPress={() => toggleCategory('journeySpecific')}
+            >
+              <Text style={styles.tipCategoryTitle}>Journey-Specific Tips</Text>
+              <MaterialIcons
+                name={expandedCategories.journeySpecific ? 'expand-less' : 'expand-more'}
+                size={24}
+                color={THEME_COLOR}
+              />
+            </TouchableOpacity>
+            {expandedCategories.journeySpecific && (
+              <Animated.View style={styles.tipList}>
+                {detailedTravelTips.slice(0, Math.ceil(detailedTravelTips.length / 2)).map((tip, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.8}
+                    onPressIn={() => animateCardPressIn(index)}
+                    onPressOut={() => animateCardPressOut(index)}
+                  >
+                    <Animated.View
+                      style={[
+                        styles.tipCard,
+                        { transform: [{ scale: cardScaleAnims[index] }] },
+                        { backgroundColor: index % 2 === 0 ? '#E3F2FD' : '#E8F5E9' },
+                      ]}
+                    >
+                      <View style={styles.tipIconContainer}>
+                        <MaterialIcons name="lightbulb-outline" size={20} color={THEME_COLOR} />
+                      </View>
+                      <Text style={styles.tipItemText}>{tip}</Text>
+                    </Animated.View>
+                  </TouchableOpacity>
+                ))}
+              </Animated.View>
+            )}
+          </View>
+
+          <View style={styles.tipCategoryContainer}>
+            <TouchableOpacity
+              style={styles.tipCategoryHeader}
+              onPress={() => toggleCategory('general')}
+            >
+              <Text style={styles.tipCategoryTitle}>General Travel Tips</Text>
+              <MaterialIcons
+                name={expandedCategories.general ? 'expand-less' : 'expand-more'}
+                size={24}
+                color={THEME_COLOR}
+              />
+            </TouchableOpacity>
+            {expandedCategories.general && (
+              <Animated.View style={styles.tipList}>
+                {detailedTravelTips.slice(Math.ceil(detailedTravelTips.length / 2)).map((tip, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.8}
+                    onPressIn={() => animateCardPressIn(index + Math.ceil(detailedTravelTips.length / 2))}
+                    onPressOut={() => animateCardPressOut(index + Math.ceil(detailedTravelTips.length / 2))}
+                  >
+                    <Animated.View
+                      style={[
+                        styles.tipCard,
+                        { transform: [{ scale: cardScaleAnims[index + Math.ceil(detailedTravelTips.length / 2)] }] },
+                        { backgroundColor: index % 2 === 0 ? '#E3F2FD' : '#E8F5E9' },
+                      ]}
+                    >
+                      <View style={styles.tipIconContainer}>
+                        <MaterialIcons name="info-outline" size={20} color={THEME_COLOR} />
+                      </View>
+                      <Text style={styles.tipItemText}>{tip}</Text>
+                    </Animated.View>
+                  </TouchableOpacity>
+                ))}
+              </Animated.View>
+            )}
+          </View>
+        </ScrollView>
+
+        <View style={styles.tipsActionContainer}>
+          <TouchableOpacity
+            style={styles.saveTipsButton}
+            onPress={() => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Tips Saved', 'Travel tips have been saved for later use.');
+            }}
+          >
+            <LinearGradient
+              colors={[SUCCESS_COLOR, '#2E7D32']}
+              style={styles.gradientButton}
+            >
+              <MaterialIcons name="save" size={20} color="#fff" />
+              <Text style={styles.saveTipsButtonText}>Save Tips</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderScheduleModal = () => (
+    <Modal
+      visible={showScheduleModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowScheduleModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Bus Schedule</Text>
+            <TouchableOpacity onPress={() => setShowScheduleModal(false)}>
+              <MaterialIcons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.scheduleList}>
+            {selectedRoute?.departures?.map((departure, index) => (
+              <View key={index} style={styles.scheduleItem}>
+                <View style={styles.scheduleTimes}>
+                  <View style={styles.scheduleTimeBlock}>
+                    <Text style={styles.scheduleTimeLabel}>Departure</Text>
+                    <Text style={styles.scheduleTime}>{departure}</Text>
+                  </View>
+                  <MaterialIcons name="arrow-forward" size={20} color="#777" />
+                  <View style={styles.scheduleTimeBlock}>
+                    <Text style={styles.scheduleTimeLabel}>Arrival</Text>
+                    <Text style={styles.scheduleTime}>N/A</Text>
+                  </View>
+                </View>
+                <TouchableOpacity style={styles.scheduleBookButton}>
+                  <Text style={styles.scheduleBookText}>Book</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.viewAllButton}>
+            <Text style={styles.viewAllText}>View All Schedules</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderLiveTrackingModal = () => (
+    <Modal
+      visible={showLiveTrackingModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowLiveTrackingModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Live Journey Tracking</Text>
+            <TouchableOpacity onPress={() => setShowLiveTrackingModal(false)}>
+              <MaterialIcons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.liveTrackingContent}>
+            <LottieView
+              ref={journeyAnimationRef}
+              source={require('../assets/animations/journey.json')}
+              autoPlay
+              loop
+              style={styles.liveAnimation}
+            />
+
+            <View style={styles.liveTrackingInfo}>
+              <View style={styles.liveTrackingSegment}>
+                <Text style={styles.liveTrackingTitle}>Current Segment</Text>
+                <Text style={styles.liveTrackingSegmentName}>
+                  {selectedRoute?.segments[0]?.from} → {selectedRoute?.segments[0]?.to}
+                </Text>
+                <Text style={styles.liveTrackingBusInfo}>
+                  {selectedRoute?.segments[0]?.mode} {selectedRoute?.segments[0]?.busNumber} ({selectedRoute?.segments[0]?.type})
+                </Text>
+              </View>
+
+              <View style={styles.liveTrackingStats}>
+                <View style={styles.liveTrackingStat}>
+                  <MaterialIcons name="access-time" size={16} color="#555" />
+                  <Text style={styles.liveStatLabel}>ETA:</Text>
+                  <Text style={styles.liveStatValue}>{estimatedTimeRemaining}</Text>
+                </View>
+
+                <View style={styles.liveTrackingStat}>
+                  <MaterialIcons name="speed" size={16} color="#555" />
+                  <Text style={styles.liveStatLabel}>Speed:</Text>
+                  <Text style={styles.liveStatValue}>48 km/h</Text>
+                </View>
+
+                <View style={styles.liveTrackingStat}>
+                  <MaterialIcons name="location-on" size={16} color="#555" />
+                  <Text style={styles.liveStatLabel}>Next Stop:</Text>
+                  <Text style={styles.liveStatValue}>
+                    {selectedRoute?.segments[0]?.stops[1] || 'Final Destination'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.liveNotifications}>
+                <View style={styles.notificationItem}>
+                  <MaterialIcons name="notifications" size={16} color={WARNING_COLOR} />
+                  <Text style={styles.notificationText}>Arrival in 5 minutes at next stop</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.shareJourneyButton}>
+              <LinearGradient
+                colors={[THEME_COLOR, '#0d47a1']}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.shareJourneyText}>Share My Journey</Text>
+                <MaterialIcons name="share" size={18} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -744,7 +1143,7 @@ const JourneyPlannerScreen = () => {
 
       {showStartScreen
         ? renderStartScreen()
-        : journeyPlan
+        : journeyPlan || alternateRoutes.length > 0
         ? renderJourneyPlan()
         : renderPlanner()}
 
@@ -756,157 +1155,10 @@ const JourneyPlannerScreen = () => {
         onSignOut={handleSignOut}
       />
 
-      <Modal
-        visible={showScheduleModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowScheduleModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bus Schedule</Text>
-              <TouchableOpacity onPress={() => setShowScheduleModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.scheduleList}>
-              {selectedRoute?.departures?.map((departure, index) => (
-                <View key={index} style={styles.scheduleItem}>
-                  <View style={styles.scheduleTimes}>
-                    <View style={styles.scheduleTimeBlock}>
-                      <Text style={styles.scheduleTimeLabel}>Departure</Text>
-                      <Text style={styles.scheduleTime}>{departure}</Text>
-                    </View>
-                    <MaterialIcons name="arrow-forward" size={20} color="#777" />
-                    <View style={styles.scheduleTimeBlock}>
-                      <Text style={styles.scheduleTimeLabel}>Arrival</Text>
-                      <Text style={styles.scheduleTime}>N/A</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={styles.scheduleBookButton}>
-                    <Text style={styles.scheduleBookText}>Book</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-
-            <TouchableOpacity style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View All Schedules</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showLiveTrackingModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLiveTrackingModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Live Journey Tracking</Text>
-              <TouchableOpacity onPress={() => setShowLiveTrackingModal(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.liveTrackingContent}>
-              <LottieView
-                ref={journeyAnimationRef}
-                source={require('../assets/animations/journey.json')}
-                autoPlay
-                loop
-                style={styles.liveAnimation}
-              />
-
-              <View style={styles.liveTrackingInfo}>
-                <View style={styles.liveTrackingSegment}>
-                  <Text style={styles.liveTrackingTitle}>Current Segment</Text>
-                  <Text style={styles.liveTrackingSegmentName}>
-                    {selectedRoute?.segments[0]?.from} → {selectedRoute?.segments[0]?.to}
-                  </Text>
-                  <Text style={styles.liveTrackingBusInfo}>
-                    {selectedRoute?.segments[0]?.mode} {selectedRoute?.segments[0]?.busNumber} ({selectedRoute?.segments[0]?.type})
-                  </Text>
-                </View>
-
-                <View style={styles.liveTrackingStats}>
-                  <View style={styles.liveTrackingStat}>
-                    <MaterialIcons name="access-time" size={16} color="#555" />
-                    <Text style={styles.liveStatLabel}>ETA:</Text>
-                    <Text style={styles.liveStatValue}>{estimatedTimeRemaining}</Text>
-                  </View>
-
-                  <View style={styles.liveTrackingStat}>
-                    <MaterialIcons name="speed" size={16} color="#555" />
-                    <Text style={styles.liveStatLabel}>Speed:</Text>
-                    <Text style={styles.liveStatValue}>48 km/h</Text>
-                  </View>
-
-                  <View style={styles.liveTrackingStat}>
-                    <MaterialIcons name="location-on" size={16} color="#555" />
-                    <Text style={styles.liveStatLabel}>Next Stop:</Text>
-                    <Text style={styles.liveStatValue}>
-                      {selectedRoute?.segments[0]?.stops[1] || 'Final Destination'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.liveNotifications}>
-                  <View style={styles.notificationItem}>
-                    <MaterialIcons name="notifications" size={16} color={WARNING_COLOR} />
-                    <Text style={styles.notificationText}>Arrival in 5 minutes at next stop</Text>
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity style={styles.shareJourneyButton}>
-                <LinearGradient
-                  colors={[THEME_COLOR, '#0d47a1']}
-                  style={styles.gradientButton}
-                >
-                  <Text style={styles.shareJourneyText}>Share My Journey</Text>
-                  <MaterialIcons name="share" size={18} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showTravelTips}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowTravelTips(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Travel Tips</Text>
-              <TouchableOpacity onPress={() => setShowTravelTips(false)}>
-                <MaterialIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.tipsScrollView}>
-              <View style={styles.tipCategory}>
-                <Text style={styles.tipCategoryTitle}>Journey-Specific Tips</Text>
-                {detailedTravelTips.map((tip, index) => (
-                  <View key={index} style={styles.tipItem}>
-                    <MaterialIcons name="lightbulb-outline" size={16} color={THEME_COLOR} />
-                    <Text style={styles.tipItemText}>{tip}</Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {renderRoadmapModal()}
+      {renderTravelTipsModal()}
+      {renderScheduleModal()}
+      {renderLiveTrackingModal()}
     </SafeAreaView>
   );
 };
@@ -1046,6 +1298,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
+  gradientButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
   searchButtonText: {
     color: '#fff',
     fontSize: 16,
@@ -1060,36 +1320,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  tipsContainer: {
-    backgroundColor: '#fff',
+  travelTipsButton: {
+    marginTop: 12,
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    width: '50%',
   },
-  tipsTitle: {
+  travelTipsButtonText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  tipText: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 4,
-  },
-  showMoreTips: {
-    marginTop: 8,
-    alignSelf: 'flex-end',
-  },
-  showMoreTipsText: {
-    color: '#1976d2',
-    fontSize: 14,
     fontWeight: '500',
+    marginLeft: 8,
   },
   journeyContainer: {
     flex: 1,
@@ -1125,7 +1367,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   mapContainer: {
-    height: height * 0.3,
+    height: height * 0.4,
     position: 'relative',
   },
   map: {
@@ -1180,7 +1422,7 @@ const styles = StyleSheet.create({
   },
   journeySummaryContainer: {
     backgroundColor: '#fff',
-    padding: 12,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
@@ -1190,14 +1432,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   journeyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   journeyStats: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   journeyStatText: {
     fontSize: 14,
@@ -1209,11 +1452,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   startJourneyButtonText: {
     color: '#fff',
-    fontWeight: '500',
+    fontWeight: '600',
+    fontSize: 14,
   },
   etaContainer: {
     alignItems: 'center',
@@ -1231,9 +1475,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   progressBackground: {
-    height: 6,
+    height: 8,
     backgroundColor: '#e0e0e0',
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
@@ -1243,175 +1487,72 @@ const styles = StyleSheet.create({
   progressLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 6,
   },
   progressStart: {
     fontSize: 12,
-    color: '#777',
+    color: '#555',
+    fontWeight: '500',
   },
   progressEnd: {
     fontSize: 12,
-    color: '#777',
-    textAlign: 'right',
-  },
-  roadmapContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 16,
-  },
-  roadmapTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  roadmap: {
-    flex: 1,
-  },
-  segment: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  activeSegment: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  segmentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  segmentTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-  },
-  startDot: {
-    marginRight: 8,
-    marginTop: 2,
-  },
-  segmentTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  segmentBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  badge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 6,
-    marginBottom: 4,
-  },
-  typeBadge: {
-    backgroundColor: '#e3f2fd',
-  },
-  amenityBadge: {
-    backgroundColor: '#e8f5e9',
-  },
-  badgeText: {
-    fontSize: 12,
     color: '#555',
-  },
-  segmentReason: {
-    fontSize: 12,
-    color: '#777',
-    marginTop: 4,
-  },
-  busNumberButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  buserylNumber: {
-    fontSize: 14,
     fontWeight: '500',
-    color: '#1976d2',
-    marginRight: 4,
-  },
-  segmentDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  segmentDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-    marginBottom: 4,
-  },
-  segmentInfo: {
-    fontSize: 14,
-    color: '#555',
-    marginLeft: 4,
-  },
-  stopsContainer: {
-    marginBottom: 8,
-  },
-  stopsTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#555',
-    marginBottom: 4,
-  },
-  stopsList: {
-    paddingLeft: 8,
-  },
-  stopItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  stopDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#777',
-    marginRight: 8,
-  },
-  stopText: {
-    fontSize: 14,
-    color: '#555',
   },
   actionBar: {
     backgroundColor: '#fff',
-    padding: 12,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
   journeyInfoContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
   },
   infoText: {
     fontSize: 14,
     color: '#555',
     marginLeft: 4,
   },
+  roadmapButton: {
+    borderRadius: 6,
+  },
+  roadmapButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
   startJourneyButton: {
     borderRadius: 8,
     overflow: 'hidden',
+  },
+  fallbackContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  fallbackText: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
   modalContainer: {
     flex: 1,
@@ -1422,7 +1563,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    maxHeight: '80%',
+    maxHeight: '60%',
+  },
+  roadmapModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '60%',
+  },
+  fullScreenModalContent: {
+    maxHeight: '100%',
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1432,10 +1584,141 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalActionButton: {
+    marginLeft: 12,
+  },
   modalTitle: {
     fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  roadmap: {
+    padding: 16,
+  },
+  segment: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  activeSegment: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  segmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  segmentTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  startDot: {
+    marginRight: 12,
+  },
+  segmentTitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  segmentSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  segmentBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  amenityBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '500',
+  },
+  segmentReason: {
+    fontSize: 13,
+    color: '#777',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  busScheduleButton: {
+    borderRadius: 6,
+  },
+  busScheduleButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  segmentDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+    justifyContent: 'space-between',
+  },
+  segmentDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '48%',
+    marginBottom: 8,
+  },
+  segmentInfo: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  stopsContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 12,
+  },
+  stopsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  stopsList: {
+    paddingLeft: 8,
+  },
+  stopItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stopDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1976d2',
+    marginRight: 12,
+  },
+  stopText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
   },
   scheduleList: {
     padding: 16,
@@ -1561,28 +1844,108 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 8,
   },
-  tipsScrollView: {
+  tipsModalContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  tipsModalHeader: {
+    paddingTop: 40,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  tipsHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tipsHeaderAnimation: {
+    width: 80,
+    height: 80,
+    marginRight: 12,
+  },
+  tipsModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#fff',
+    flex: 1,
+  },
+  tipsCloseButton: {
+    padding: 8,
+  },
+  tipsContent: {
+    flex: 1,
     padding: 16,
   },
-  tipCategory: {
-    marginBottom: 20,
+  tipCategoryContainer: {
+    marginBottom: 24,
+  },
+  tipCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   tipCategoryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#333',
-    marginBottom: 12,
   },
-  tipItem: {
+  tipList: {
+    paddingTop: 12,
+  },
+  tipCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  tipIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    elevation: 2,
   },
   tipItemText: {
     fontSize: 14,
-    color: '#555',
-    marginLeft: 12,
+    color: '#333',
     flex: 1,
+    lineHeight: 20,
+  },
+  tipsActionContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  saveTipsButton: {
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  saveTipsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   markerContainer: {
     backgroundColor: '#1976d2',
