@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -26,6 +26,7 @@ import { BlurView } from 'expo-blur';
 import Sidebar from '../components/Sidebar';
 import { UserContext } from '../screens/UserContext';
 import { useNavigation } from '@react-navigation/native';
+import debounce from 'lodash/debounce';
 
 const { width, height } = Dimensions.get('window');
 const API_URL = 'http://192.168.11.179:3000';
@@ -40,6 +41,7 @@ const HomeScreen = () => {
   const [busSearch, setBusSearch] = useState('');
   const [searchMode, setSearchMode] = useState(false);
   const [busSearchMode, setBusSearchMode] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('home');
   const [mapMarkers, setMapMarkers] = useState([]);
@@ -79,7 +81,6 @@ const HomeScreen = () => {
   const locationUpdateInterval = useRef(null);
   const mapRef = useRef(null);
 
-  // Animated region for smooth marker movement
   const animatedDriverCoordinate = useRef(
     new AnimatedRegion({
       latitude: 0,
@@ -91,6 +92,22 @@ const HomeScreen = () => {
 
   const slideAnim = useState(new Animated.Value(100))[0];
   const fadeAnim = useState(new Animated.Value(0))[0];
+
+  // Function to fix malformed bus_stops data
+  const fixBusStops = (busStops) => {
+    return busStops.map((stop) => {
+      if (stop.name) return stop;
+      const name = Object.keys(stop)
+        .filter((key) => key !== '_id' && !isNaN(key))
+        .sort((a, b) => Number(a) - Number(b))
+        .map((key) => stop[key])
+        .join('');
+      return {
+        name: name || 'Unknown Stop',
+        coordinates: stop.coordinates || { latitude: null, longitude: null },
+      };
+    });
+  };
 
   useEffect(() => {
     if (user.role === 'driver' && !user.profileComplete) {
@@ -182,6 +199,10 @@ const HomeScreen = () => {
   };
 
   const normalizeBusDetails = (busDetails) => {
+    if (!busDetails || typeof busDetails !== 'string') {
+      console.warn('Invalid busDetails:', busDetails);
+      return '';
+    }
     const cleaned = busDetails.replace(/^BUS_+/i, '').trim().toUpperCase();
     return `BUS_${cleaned}`;
   };
@@ -223,9 +244,20 @@ const HomeScreen = () => {
   };
 
   const fetchDriverLocation = async (busDetails) => {
+    if (!busDetails) {
+      console.warn('busDetails is undefined or null');
+      setDriverLocation(null);
+      setLastUpdated(null);
+      setLastDriverBearing(0);
+      setLocationLoading(false);
+      return null;
+    }
     try {
       setLocationLoading(true);
       const normalizedBusDetails = normalizeBusDetails(busDetails);
+      if (!normalizedBusDetails) {
+        throw new Error('Invalid bus details format');
+      }
       console.log(`Fetching location for busDetails: ${normalizedBusDetails}`);
       const response = await fetch(`${API_URL}/api/driver-locations/${encodeURIComponent(normalizedBusDetails)}`);
       console.log(`HTTP Status: ${response.status}`);
@@ -296,6 +328,83 @@ const HomeScreen = () => {
     }
   };
 
+  const debouncedSearch = useCallback(
+    debounce(async (from, to) => {
+      try {
+        const url = `${API_URL}/api/bus-routes/route/${encodeURIComponent(from)}/${encodeURIComponent(to)}`;
+        console.log('Fetching routes from:', url);
+        const response = await fetch(url);
+        const data = await response.json();
+        console.log('Routes response:', data);
+
+        if (response.ok && Array.isArray(data) && data.length > 0) {
+          // Fix bus_stops for each route
+          const fixedRoutes = data.map((route) => ({
+            ...route,
+            bus_stops: fixBusStops(route.bus_stops),
+          }));
+          setRoutes(fixedRoutes);
+          const newMarkers = [];
+          for (const route of fixedRoutes) {
+            if (route.bus_stops && Array.isArray(route.bus_stops)) {
+              for (const stop of route.bus_stops) {
+                const coords = await fetchCoordinates(stop.name);
+                if (coords) {
+                  newMarkers.push({
+                    coordinate: coords,
+                    title: stop.name,
+                    type: 'bus_stop',
+                  });
+                }
+              }
+            }
+            if (route.busDetails) {
+              await fetchDriverLocation(route.busDetails);
+            }
+          }
+
+          setMapMarkers([
+            ...mapMarkers.filter((marker) => marker.type === 'user'),
+            ...newMarkers,
+            ...(driverLocation
+              ? [
+                  {
+                    coordinate: driverLocation,
+                    title: `Bus ${fixedRoutes[0]?.busDetails || 'Unknown'} Location`,
+                    type: 'driver',
+                  },
+                ]
+              : []),
+          ]);
+        } else {
+          const message = data.message || 'No routes found';
+          console.log('Debug Info:', data.debug || 'No debug info');
+          alert(
+            data.debug
+              ? `${message}\nFrom matches: ${data.debug.fromMatches}\nTo matches: ${data.debug.toMatches}`
+              : message
+          );
+          setRoutes([]);
+          setDriverLocation(null);
+          setLastUpdated(null);
+          setLastDriverBearing(0);
+        }
+      } catch (error) {
+        console.error('Error fetching routes:', error);
+        alert(
+          `Failed to fetch routes: ${error.message}. Ensure the backend is running at ${API_URL}.`
+        );
+        setRoutes([]);
+        setDriverLocation(null);
+        setLastUpdated(null);
+        setLastDriverBearing(0);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 500),
+    [mapMarkers, driverLocation]
+  );
+
   const handleSearch = async () => {
     const trimmedFrom = fromLocation.trim();
     const trimmedTo = toLocation.trim();
@@ -305,70 +414,11 @@ const HomeScreen = () => {
       return;
     }
 
-    try {
-      const url = `${API_URL}/api/bus-routes/route/${encodeURIComponent(trimmedFrom)}/${encodeURIComponent(trimmedTo)}`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (response.ok) {
-        setRoutes(data);
-        const newMarkers = [];
-        for (const route of data) {
-          for (const stop of route.bus_stops) {
-            const coords = await fetchCoordinates(stop);
-            if (coords) {
-              newMarkers.push({
-                coordinate: coords,
-                title: stop,
-                type: 'bus_stop',
-              });
-            }
-          }
-          if (route.busDetails) {
-            await fetchDriverLocation(route.busDetails);
-          }
-        }
-
-        setMapMarkers([
-          ...mapMarkers.filter((marker) => marker.type === 'user'),
-          ...newMarkers,
-          ...(driverLocation
-            ? [
-                {
-                  coordinate: driverLocation,
-                  title: `Bus ${data[0]?.busDetails || 'Unknown'} Location`,
-                  type: 'driver',
-                },
-              ]
-            : []),
-        ]);
-      } else {
-        const message = data.message || 'No routes found';
-        if (data.debug) {
-          console.log('Debug Info:', data.debug);
-          alert(
-            `${message}\nFrom matches: ${data.debug.fromMatches}\nTo matches: ${data.debug.toMatches}`
-          );
-        } else {
-          alert(message);
-        }
-        setRoutes([]);
-        setDriverLocation(null);
-        setLastUpdated(null);
-        setLastDriverBearing(0);
-      }
-    } catch (error) {
-      console.error('Error fetching routes:', error);
-      alert(
-        `Failed to fetch routes: ${error.message}. Ensure the backend is running at ${API_URL}.`
-      );
-      setRoutes([]);
-      setDriverLocation(null);
-      setLastUpdated(null);
-      setLastDriverBearing(0);
-    }
-
+    setSearchLoading(true);
     setSearchMode(false);
+    setFromLocation('');
+    setToLocation('');
+    debouncedSearch(trimmedFrom, trimmedTo);
   };
 
   const handleBusSearch = async () => {
@@ -386,6 +436,10 @@ const HomeScreen = () => {
 
     try {
       const normalizedBusSearch = normalizeBusDetails(trimmedBusSearch);
+      if (!normalizedBusSearch) {
+        alert('Invalid bus number format.');
+        return;
+      }
       console.log(`Searching for bus: ${normalizedBusSearch}`);
       const location = await fetchDriverLocation(normalizedBusSearch);
       if (location) {
@@ -417,11 +471,18 @@ const HomeScreen = () => {
   };
 
   const handleRouteSelect = (route) => {
-    setSelectedRoute(route);
+    // Fix bus_stops when selecting a route
+    const fixedRoute = {
+      ...route,
+      bus_stops: fixBusStops(route.bus_stops),
+    };
+    setSelectedRoute(fixedRoute);
     setRouteDetailsVisible(true);
     setShowBusStops(true);
-    if (route.busDetails) {
-      fetchDriverLocation(route.busDetails);
+    if (fixedRoute?.busDetails) {
+      fetchDriverLocation(fixedRoute.busDetails);
+    } else {
+      console.warn('No busDetails found for the selected route');
     }
   };
 
@@ -462,6 +523,7 @@ const HomeScreen = () => {
   };
 
   const renderBusStops = (stops) => {
+    if (!stops || !Array.isArray(stops)) return null;
     return stops.map((stop, index) => (
       <View key={index} style={styles.routeStopItem}>
         <View style={styles.routeStopDot}>
@@ -484,9 +546,9 @@ const HomeScreen = () => {
                 ? styles.endStop
                 : {},
             ]}
-            accessibilityLabel={`Stop ${stop}`}
+            accessibilityLabel={`Stop ${stop.name}`}
           >
-            {stop}
+            {stop.name || 'Unknown Stop'}
           </Text>
           {index === 0 && <Text style={styles.endpointLabel}>Start</Text>}
           {index === stops.length - 1 && <Text style={styles.endpointLabel}>End</Text>}
@@ -595,16 +657,23 @@ const HomeScreen = () => {
                 onChangeText={(text) => setToLocation(text)}
               />
             </View>
-            <TouchableOpacity
-              style={[
-                styles.searchButton,
-                (!fromLocation.trim() || !toLocation.trim()) && styles.searchButtonDisabled,
-              ]}
-              onPress={handleSearch}
-              disabled={!fromLocation.trim() || !toLocation.trim()}
-            >
-              <Text style={styles.searchButtonText}>Search</Text>
-            </TouchableOpacity>
+            {searchLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#1976d2" />
+                <Text style={styles.loadingText}>Searching...</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.searchButton,
+                  (!fromLocation.trim() || !toLocation.trim()) && styles.searchButtonDisabled,
+                ]}
+                onPress={handleSearch}
+                disabled={!fromLocation.trim() || !toLocation.trim()}
+              >
+                <Text style={styles.searchButtonText}>Search</Text>
+              </TouchableOpacity>
+            )}
           </BlurView>
         </View>
       </Modal>
@@ -635,10 +704,7 @@ const HomeScreen = () => {
             </View>
             <Text style={styles.inputHint}>Enter the bus number as shown on the bus (e.g., 12C, 1A).</Text>
             <TouchableOpacity
-              style={[
-                styles.searchButton,
-                !busSearch.trim() && styles.searchButtonDisabled,
-              ]}
+              style={[styles.searchButton, !busSearch.trim() && styles.searchButtonDisabled]}
               onPress={handleBusSearch}
               disabled={!busSearch.trim()}
             >
@@ -705,13 +771,13 @@ const HomeScreen = () => {
               <View style={styles.routeHero}>
                 <View style={styles.routeNumberBadge}>
                   <Text style={styles.routeNumberText}>
-                    {selectedRoute.route_number || selectedRoute.busDetails.replace('BUS_', '')}
+                    {selectedRoute.route_number || (selectedRoute.busDetails ? selectedRoute.busDetails.replace('BUS_', '') : 'Unknown')}
                   </Text>
                 </View>
                 <Text style={styles.routeTitle}>
                   {selectedRoute.from
                     ? `${selectedRoute.from} to ${selectedRoute.to}`
-                    : `Bus ${selectedRoute.busDetails.replace('BUS_', '')}`}
+                    : `Bus ${selectedRoute.busDetails ? selectedRoute.busDetails.replace('BUS_', '') : 'Unknown'}`}
                 </Text>
                 {selectedRoute.travel_time && (
                   <Text style={styles.routeSubtitle}>
@@ -774,7 +840,7 @@ const HomeScreen = () => {
                       {driverLocation.longitude.toFixed(4)}
                     </Text>
                     <Text style={styles.infoValue}>
-                      Bus: {selectedRoute.busDetails.replace('BUS_', '')}
+                      Bus: {selectedRoute.busDetails ? selectedRoute.busDetails.replace('BUS_', '') : 'Unknown'}
                     </Text>
                     {lastUpdated && (
                       <Text style={styles.lastUpdatedText}>
@@ -973,6 +1039,7 @@ const styles = StyleSheet.create({
     right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    zIndex: 100,
   },
   searchOptionButton: {
     flexDirection: 'row',
@@ -994,6 +1061,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 1000,
   },
   searchContainer: {
     marginHorizontal: 20,
@@ -1018,7 +1086,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 8,
+    borderRadius: 6,
     marginBottom: 15,
     paddingHorizontal: 10,
     backgroundColor: '#f9f9f9',
@@ -1065,6 +1133,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     maxHeight: height * 0.4,
+    zIndex: 100,
   },
   busInfoCardHeader: {
     flexDirection: 'row',
@@ -1337,6 +1406,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 12,
+    zIndex: 100,
   },
   co2Text: {
     color: '#fff',
@@ -1348,6 +1418,7 @@ const styles = StyleSheet.create({
   notificationModal: {
     flex: 1,
     justifyContent: 'flex-end',
+    zIndex: 1000,
   },
   notificationContainer: {
     backgroundColor: '#fff',

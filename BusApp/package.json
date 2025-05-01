@@ -34,6 +34,7 @@
     "expo-speech": "~13.0.1",
     "expo-speech-recognition": "^1.1.1",
     "expo-status-bar": "~2.0.1",
+    "lodash": "^4.17.21",
     "lottie-react-native": "7.1.0",
     "maps": "^0.3.3",
     "react": "18.3.1",
