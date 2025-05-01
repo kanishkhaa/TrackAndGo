@@ -18,10 +18,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 import SidebarDriver from '../components/SidebarDriver';
 
+const API_URL = 'http://192.168.11.179:3000/api/lost-found';
+
 const LostFoundDriver = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('report'); // 'report', 'found', 'claims'
+  const [activeTab, setActiveTab] = useState('report');
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,85 +33,37 @@ const LostFoundDriver = ({ navigation }) => {
   const [isTipVisible, setIsTipVisible] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Form states for reporting found items
+  // Form states
   const [itemDescription, setItemDescription] = useState('');
   const [itemType, setItemType] = useState('');
+  const [customItemType, setCustomItemType] = useState('');
   const [itemColor, setItemColor] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
+  const [customVehicleNumber, setCustomVehicleNumber] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
-  const [dateFound, setDateFound] = useState(''); // Manual input: YYYY-MM-DD
-  const [timeFound, setTimeFound] = useState(''); // Manual input: HH:MM
+  const [customStorageLocation, setCustomStorageLocation] = useState('');
+  const [dateFound, setDateFound] = useState('');
+  const [timeFound, setTimeFound] = useState('');
   const [imageUri, setImageUri] = useState(null);
 
   // Animation value for tip box
   const tipOpacity = new Animated.Value(1);
 
-  // Predefined item types for quick selection
+  // Predefined item types and vehicle numbers
   const commonItemTypes = ['Wallet', 'Phone', 'Keys', 'Bag', 'Umbrella', 'Headphones', 'Laptop', 'Clothing', 'Other'];
+  const commonVehicleNumbers = ['Bus 42', 'Bus 105', 'Train Line 1', 'Train Line 3', 'Metro A', 'Metro B', 'Tram 7'];
+  const commonStorageLocations = ['Central Station', 'West End Terminal', 'North Square', 'Market Street', 'University Stop', 'Airport Terminal'];
   const [selectedItemType, setSelectedItemType] = useState(null);
+  const [selectedVehicleNumber, setSelectedVehicleNumber] = useState(null);
+  const [selectedStorageLocation, setSelectedStorageLocation] = useState(null);
 
-  // Sample data for found items and claims
   const [foundItems, setFoundItems] = useState([]);
   const [claimRequests, setClaimRequests] = useState([]);
 
   useEffect(() => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setFoundItems([
-        {
-          id: '1',
-          description: 'Black leather wallet',
-          type: 'Wallet',
-          color: 'Black',
-          vehicleNumber: 'Bus 42',
-          storageLocation: 'Central Station Lost & Found',
-          dateFound: '2025-04-10',
-          timeFound: '14:30',
-          status: 'Stored',
-          referenceNumber: 'FF-2025-001',
-          image: 'https://example.com/wallet.jpg',
-        },
-        {
-          id: '2',
-          description: 'Blue umbrella',
-          type: 'Umbrella',
-          color: 'Blue',
-          vehicleNumber: 'Train Line 3',
-          storageLocation: 'West End Terminal',
-          dateFound: '2025-04-12',
-          timeFound: '09:15',
-          status: 'Claimed',
-          referenceNumber: 'FF-2025-002',
-          image: null,
-        },
-      ]);
+    fetchData();
 
-      setClaimRequests([
-        {
-          id: '1',
-          lostItemRef: 'LF-2025-003',
-          foundItemRef: 'FF-2025-001',
-          description: 'Black leather wallet',
-          userContact: 'user@example.com',
-          status: 'Pending',
-          submittedDate: '2025-04-11',
-        },
-      ]);
-
-      setNotifications([
-        {
-          id: '1',
-          title: 'New Claim Request',
-          message: 'A claim has been submitted for found item FF-2025-001',
-          time: '2 hours ago',
-          isRead: false,
-        },
-      ]);
-
-      setIsLoading(false);
-    }, 1000);
-
-    // Animate tip box to fade out after 10 seconds
+    // Animate tip box
     setTimeout(() => {
       Animated.timing(tipOpacity, {
         toValue: 0,
@@ -118,15 +73,33 @@ const LostFoundDriver = ({ navigation }) => {
     }, 10000);
   }, []);
 
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [foundResponse, claimsResponse, notificationsResponse] = await Promise.all([
+        axios.get(`${API_URL}/found`),
+        axios.get(`${API_URL}/claims`),
+        axios.get(`${API_URL}/notifications`),
+      ]);
+
+      setFoundItems(foundResponse.data);
+      setClaimRequests(claimsResponse.data);
+      setNotifications(notificationsResponse.data);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to fetch data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    fetchData().then(() => setRefreshing(false));
   }, []);
 
   const toggleSidebar = () => {
-    setSidebarVisible(!sidebarVisible);
+    setSidebarVisible(prev => !prev);
   };
 
   const toggleDarkMode = () => {
@@ -140,10 +113,15 @@ const LostFoundDriver = ({ navigation }) => {
   const resetForm = () => {
     setItemDescription('');
     setItemType('');
+    setCustomItemType('');
     setSelectedItemType(null);
     setItemColor('');
     setVehicleNumber('');
+    setCustomVehicleNumber('');
+    setSelectedVehicleNumber(null);
     setStorageLocation('');
+    setCustomStorageLocation('');
+    setSelectedStorageLocation(null);
     setDateFound('');
     setTimeFound('');
     setImageUri(null);
@@ -152,6 +130,25 @@ const LostFoundDriver = ({ navigation }) => {
   const handleItemTypeSelect = (type) => {
     setSelectedItemType(type);
     setItemType(type);
+    if (type !== 'Other') {
+      setCustomItemType('');
+    }
+  };
+
+  const handleVehicleNumberSelect = (number) => {
+    setSelectedVehicleNumber(number);
+    setVehicleNumber(number);
+    if (number !== 'Other') {
+      setCustomVehicleNumber('');
+    }
+  };
+
+  const handleStorageLocationSelect = (location) => {
+    setSelectedStorageLocation(location);
+    setStorageLocation(location);
+    if (location !== 'Other') {
+      setCustomStorageLocation('');
+    }
   };
 
   const pickImage = async () => {
@@ -173,8 +170,12 @@ const LostFoundDriver = ({ navigation }) => {
     }
   };
 
-  const handleSubmit = () => {
-    if (!itemType || !itemDescription || !vehicleNumber || !storageLocation) {
+  const handleSubmit = async () => {
+    const finalItemType = selectedItemType === 'Other' ? customItemType : itemType;
+    const finalVehicleNumber = selectedVehicleNumber === 'Other' ? customVehicleNumber : vehicleNumber;
+    const finalStorageLocation = selectedStorageLocation === 'Other' ? customStorageLocation : storageLocation;
+
+    if (!finalItemType || !itemDescription || !finalVehicleNumber || !finalStorageLocation) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
@@ -193,247 +194,210 @@ const LostFoundDriver = ({ navigation }) => {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      const newReferenceNumber = `FF-2025-${Math.floor(Math.random() * 1000)}`;
+    try {
+      const response = await axios.post(`${API_URL}/found`, {
+        description: itemDescription,
+        type: finalItemType,
+        color: itemColor,
+        vehicleNumber: finalVehicleNumber,
+        storageLocation: finalStorageLocation,
+        dateFound,
+        timeFound,
+        image: imageUri,
+      });
 
       Alert.alert(
         'Success!',
-        `Found item reported successfully.\nReference number: ${newReferenceNumber}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              resetForm();
-              const newItem = {
-                id: String(foundItems.length + 1),
-                description: itemDescription,
-                type: itemType,
-                color: itemColor,
-                vehicleNumber,
-                storageLocation,
-                dateFound: dateFound || 'Unknown',
-                timeFound: timeFound || 'Unknown',
-                status: 'Stored',
-                referenceNumber: newReferenceNumber,
-                image: imageUri,
-              };
-              setFoundItems([...foundItems, newItem]);
-              setActiveTab('found');
-
-              const newNotification = {
-                id: `${notifications.length + 1}`,
-                title: 'Item Reported',
-                message: `Found item ${newReferenceNumber} reported successfully.`,
-                time: 'Just now',
-                isRead: false,
-              };
-              setNotifications([newNotification, ...notifications]);
-            },
+        `Found item reported successfully.\nReference number: ${response.data.referenceNumber}`,
+        [{
+          text: 'OK',
+          onPress: () => {
+            resetForm();
+            fetchData();
+            setActiveTab('found');
           },
-        ]
+        }]
       );
-    }, 1500);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to submit report');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleClaimAction = (claimId, action) => {
+  const handleClaimAction = async (claimId, action) => {
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      const updatedClaims = claimRequests.map((claim) =>
-        claim.id === claimId ? { ...claim, status: action === 'approve' ? 'Approved' : 'Rejected' } : claim
-      );
-      setClaimRequests(updatedClaims);
-
-      const claim = claimRequests.find((c) => c.id === claimId);
-      const newNotification = {
-        id: `${notifications.length + 1}`,
-        title: `Claim ${action === 'approve' ? 'Approved' : 'Rejected'}`,
-        message: `Claim for ${claim.foundItemRef} has been ${action === 'approve' ? 'approved' : 'rejected'}.`,
-        time: 'Just now',
-        isRead: false,
-      };
-      setNotifications([newNotification, ...notifications]);
-
+    try {
+      await axios.put(`${API_URL}/claims/${claimId}`, { status: action === 'approve' ? 'Approved' : 'Rejected' });
       Alert.alert(
         'Success',
         `Claim has been ${action === 'approve' ? 'approved' : 'rejected'}. User will be notified.`,
         [{ text: 'OK' }]
       );
-    }, 1000);
+      fetchData();
+    } catch (error) {
+      Alert.alert('Error', `Failed to ${action} claim`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const markNotificationAsRead = (notificationId) => {
-    const updatedNotifications = notifications.map((notification) =>
-      notification.id === notificationId ? { ...notification, isRead: true } : notification
-    );
-    setNotifications(updatedNotifications);
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      await axios.put(`${API_URL}/notifications/${notificationId}/read`);
+      setNotifications(prev =>
+        prev.map(n => (n._id === notificationId ? { ...n, isRead: true } : n))
+      );
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const getUnreadNotificationsCount = () => {
-    return notifications.filter((notification) => !notification.isRead).length;
+    return notifications.filter(notification => !notification.isRead).length;
   };
 
   const renderReportForm = () => (
     <ScrollView
       style={[styles.formContainer, isDarkMode && styles.darkModeBackground]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={styles.scrollContent}
     >
       <Text style={[styles.formTitle, isDarkMode && styles.darkModeText]}>Report Found Item</Text>
-
-      {isTipVisible && (
-        <Animated.View style={[styles.tipBox, { opacity: tipOpacity }]}>
-          <MaterialIcons name="lightbulb" size={20} color="#FFD700" />
-          <Text style={styles.tipText}>
-            Tip: Include clear details and a photo to help identify the item!
-          </Text>
-          <TouchableOpacity onPress={() => setIsTipVisible(false)}>
-            <MaterialIcons name="close" size={16} color="#fff" />
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Item Type *</Text>
+      <View style={styles.itemTypeContainer}>
+        {commonItemTypes.map((type, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.itemTypeButton,
+              selectedItemType === type && styles.selectedItemType,
+              isDarkMode && styles.darkModeButton,
+            ]}
+            onPress={() => handleItemTypeSelect(type)}
+          >
+            <Text style={[styles.itemTypeText, isDarkMode && styles.darkModeText]}>{type}</Text>
           </TouchableOpacity>
-        </Animated.View>
+        ))}
+      </View>
+      {selectedItemType === 'Other' && (
+        <TextInput
+          style={[styles.input, isDarkMode && styles.darkModeInput]}
+          value={customItemType}
+          onChangeText={setCustomItemType}
+          placeholder="Enter custom item type"
+          placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
+        />
       )}
 
-      <View style={styles.formGroup}>
-        <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Item Type*</Text>
-        <View style={styles.quickSelectContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {commonItemTypes.map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.quickSelectItem,
-                  selectedItemType === type && styles.quickSelectItemActive,
-                  isDarkMode && styles.darkModeQuickSelectItem,
-                  selectedItemType === type && isDarkMode && styles.darkModeQuickSelectItemActive,
-                ]}
-                onPress={() => handleItemTypeSelect(type)}
-              >
-                <Text
-                  style={[
-                    styles.quickSelectItemText,
-                    selectedItemType === type && styles.quickSelectItemTextActive,
-                    isDarkMode && styles.darkModeText,
-                  ]}
-                >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Description *</Text>
+      <TextInput
+        style={[styles.input, isDarkMode && styles.darkModeInput]}
+        value={itemDescription}
+        onChangeText={setItemDescription}
+        placeholder="e.g., Black leather wallet"
+        placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
+        multiline
+      />
+
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Color</Text>
+      <TextInput
+        style={[styles.input, isDarkMode && styles.darkModeInput]}
+        value={itemColor}
+        onChangeText={setItemColor}
+        placeholder="e.g., Black"
+        placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
+      />
+
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Vehicle Number *</Text>
+      <View style={styles.itemTypeContainer}>
+        {[...commonVehicleNumbers, 'Other'].map((number, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.itemTypeButton,
+              selectedVehicleNumber === number && styles.selectedItemType,
+              isDarkMode && styles.darkModeButton,
+            ]}
+            onPress={() => handleVehicleNumberSelect(number)}
+          >
+            <Text style={[styles.itemTypeText, isDarkMode && styles.darkModeText]}>{number}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {selectedVehicleNumber === 'Other' && (
         <TextInput
           style={[styles.input, isDarkMode && styles.darkModeInput]}
-          value={itemType}
-          onChangeText={setItemType}
-          placeholder="E.g. Wallet, Phone"
-          placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
+          value={customVehicleNumber}
+          onChangeText={setCustomVehicleNumber}
+          placeholder="Enter custom vehicle number"
+          placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
         />
-      </View>
+      )}
 
-      <View style={styles.formGroup}>
-        <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Description*</Text>
-        <TextInput
-          style={[styles.input, styles.textArea, isDarkMode && styles.darkModeInput]}
-          value={itemDescription}
-          onChangeText={setItemDescription}
-          placeholder="Describe the item"
-          placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
-          multiline
-          numberOfLines={3}
-        />
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Color</Text>
-        <TextInput
-          style={[styles.input, isDarkMode && styles.darkModeInput]}
-          value={itemColor}
-          onChangeText={setItemColor}
-          placeholder="Main color"
-          placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
-        />
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Vehicle Number*</Text>
+<View style={styles.itemTypeContainer}>
+  {[...commonStorageLocations, 'Other'].map((location, index) => (
+    <TouchableOpacity
+      key={index}
+      style={[
+        styles.itemTypeButton,
+        selectedStorageLocation === location && styles.selectedItemType,
+        isDarkMode && styles.darkModeButton,
+      ]}
+      onPress={() => handleStorageLocationSelect(location)}
+    >
+      <Text style={[styles.itemTypeText, isDarkMode && styles.darkModeText]}>
+        {location}
+      </Text>
+    </TouchableOpacity>
+  ))}
+</View>
+      {selectedStorageLocation === 'Other' && (
         <TextInput
           style={[styles.input, isDarkMode && styles.darkModeInput]}
-          value={vehicleNumber}
-          onChangeText={setVehicleNumber}
-          placeholder="E.g. Bus 42, Train Line 3"
-          placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
+          value={customStorageLocation}
+          onChangeText={setCustomStorageLocation}
+          placeholder="Enter custom storage location"
+          placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
         />
-      </View>
+      )}
 
-      <View style={styles.formGroup}>
-        <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Storage Location*</Text>
-        <TextInput
-          style={[styles.input, isDarkMode && styles.darkModeInput]}
-          value={storageLocation}
-          onChangeText={setStorageLocation}
-          placeholder="Where the item is stored"
-          placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
-        />
-      </View>
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Date Found (YYYY-MM-DD)</Text>
+      <TextInput
+        style={[styles.input, isDarkMode && styles.darkModeInput]}
+        value={dateFound}
+        onChangeText={setDateFound}
+        placeholder="e.g., 2025-05-01"
+        placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
+      />
 
-      <View style={styles.row}>
-        <View style={[styles.formGroup, styles.halfWidth]}>
-          <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Date Found (YYYY-MM-DD)</Text>
-          <TextInput
-            style={[styles.input, isDarkMode && styles.darkModeInput]}
-            value={dateFound}
-            onChangeText={setDateFound}
-            placeholder="E.g. 2025-04-15"
-            placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
-            keyboardType="numeric"
-          />
-        </View>
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Time Found (HH:MM)</Text>
+      <TextInput
+        style={[styles.input, isDarkMode && styles.darkModeInput]}
+        value={timeFound}
+        onChangeText={setTimeFound}
+        placeholder="e.g., 14:30"
+        placeholderTextColor={isDarkMode ? '#888' : '#ccc'}
+      />
 
-        <View style={[styles.formGroup, styles.halfWidth]}>
-          <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Time Found (HH:MM)</Text>
-          <TextInput
-            style={[styles.input, isDarkMode && styles.darkModeInput]}
-            value={timeFound}
-            onChangeText={setTimeFound}
-            placeholder="E.g. 14:30"
-            placeholderTextColor={isDarkMode ? '#777' : '#aaa'}
-            keyboardType="numeric"
-          />
-        </View>
-      </View>
-
-      <View style={styles.formGroup}>
-        <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Upload Photo</Text>
-        <View style={[styles.imageUploadContainer, isDarkMode && styles.darkModeImageUpload]}>
-          {imageUri ? (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-              <TouchableOpacity style={styles.removeImageButton} onPress={() => setImageUri(null)}>
-                <MaterialIcons name="close" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-              <MaterialIcons
-                name="add-photo-alternate"
-                size={24}
-                color={isDarkMode ? '#90CAF9' : '#1976d2'}
-              />
-              <Text style={[styles.uploadButtonText, isDarkMode && { color: '#90CAF9' }]}>
-                Select Image
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      <Text style={[styles.label, isDarkMode && styles.darkModeText]}>Upload Image</Text>
+      <TouchableOpacity style={[styles.uploadButton, isDarkMode && styles.darkModeButton]} onPress={pickImage}>
+        <Text style={[styles.uploadButtonText, isDarkMode && styles.darkModeText]}>
+          {imageUri ? 'Image Selected' : 'Choose Image'}
+        </Text>
+      </TouchableOpacity>
+      {imageUri && (
+        <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+      )}
 
       <TouchableOpacity
-        disabled={isLoading}
+        style={[styles.submitButton, isLoading && styles.disabledButton]}
         onPress={handleSubmit}
-        style={[styles.submitButton, isLoading && { opacity: 0.7 }]}
+        disabled={isLoading}
       >
         {isLoading ? (
-          <ActivityIndicator color="#fff" size="small" />
+          <ActivityIndicator size="small" color="#fff" />
         ) : (
           <Text style={styles.submitButtonText}>Submit Report</Text>
         )}
@@ -445,87 +409,34 @@ const LostFoundDriver = ({ navigation }) => {
     <ScrollView
       style={[styles.formContainer, isDarkMode && styles.darkModeBackground]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={styles.scrollContent}
     >
       <Text style={[styles.formTitle, isDarkMode && styles.darkModeText]}>Found Items</Text>
-
-      {foundItems.length > 0 ? (
+      {foundItems.length === 0 ? (
+        <Text style={[styles.noItemsText, isDarkMode && styles.darkModeText]}>No items reported yet.</Text>
+      ) : (
         foundItems.map((item) => (
-          <View key={item.id} style={[styles.itemCard, isDarkMode && styles.darkModeItemCard]}>
-            <View style={styles.itemCardHeader}>
-              <View style={styles.itemInfo}>
-                <Text style={[styles.itemTitle, isDarkMode && styles.darkModeText]}>
-                  {item.description}
-                </Text>
-                <Text style={[styles.itemSubtitle, isDarkMode && styles.darkModeSubtitle]}>
-                  Ref: {item.referenceNumber}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  item.status === 'Stored' && styles.statusStored,
-                  item.status === 'Claimed' && styles.statusClaimed,
-                ]}
-              >
-                <Text style={styles.statusText}>{item.status}</Text>
-              </View>
-            </View>
-
-            <View style={styles.itemCardBody}>
-              <View style={styles.itemDetail}>
-                <MaterialIcons name="category" size={16} color={isDarkMode ? '#bbb' : '#666'} />
-                <Text style={[styles.itemDetailText, isDarkMode && styles.darkModeDetailText]}>
-                  {item.type}
-                </Text>
-              </View>
-              <View style={styles.itemDetail}>
-                <MaterialIcons name="directions-bus" size={16} color={isDarkMode ? '#bbb' : '#666'} />
-                <Text style={[styles.itemDetailText, isDarkMode && styles.darkModeDetailText]}>
-                  {item.vehicleNumber}
-                </Text>
-              </View>
-              <View style={styles.itemDetail}>
-                <MaterialIcons name="location-on" size={16} color={isDarkMode ? '#bbb' : '#666'} />
-                <Text style={[styles.itemDetailText, isDarkMode && styles.darkModeDetailText]}>
-                  {item.storageLocation}
-                </Text>
-              </View>
-              <View style={styles.itemDetail}>
-                <MaterialIcons name="event" size={16} color={isDarkMode ? '#bbb' : '#666'} />
-                <Text style={[styles.itemDetailText, isDarkMode && styles.darkModeDetailText]}>
-                  {item.dateFound} {item.timeFound}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.viewDetailsButton, isDarkMode && styles.darkModeDetailsButton]}
-              onPress={() =>
-                Alert.alert('Details', `Full details for ${item.referenceNumber}`)
-              }
-            >
-              <Text style={[styles.viewDetailsButtonText, isDarkMode && { color: '#90CAF9' }]}>
-                View Details
-              </Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={20}
-                color={isDarkMode ? '#90CAF9' : '#1976d2'}
-              />
-            </TouchableOpacity>
+          <View key={item._id} style={[styles.itemCard, isDarkMode && styles.darkModeCard]}>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Reference: {item.referenceNumber}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Description: {item.description}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Vehicle: {item.vehicleNumber}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Storage: {item.storageLocation}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Status: {item.status}
+            </Text>
+            {item.image && (
+              <Image source={{ uri: item.image }} style={styles.itemImage} />
+            )}
           </View>
         ))
-      ) : (
-        <View style={styles.emptyState}>
-          <MaterialIcons
-            name="inventory"
-            size={64}
-            color={isDarkMode ? '#555' : '#ccc'}
-          />
-          <Text style={[styles.emptyStateText, isDarkMode && styles.darkModeText]}>
-            No found items reported yet
-          </Text>
-        </View>
       )}
     </ScrollView>
   );
@@ -534,69 +445,45 @@ const LostFoundDriver = ({ navigation }) => {
     <ScrollView
       style={[styles.formContainer, isDarkMode && styles.darkModeBackground]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={styles.scrollContent}
     >
       <Text style={[styles.formTitle, isDarkMode && styles.darkModeText]}>Claim Requests</Text>
-
-      <View style={[styles.infoBox, isDarkMode && styles.darkModeInfoBox]}>
-        <MaterialIcons name="info" size={20} color={isDarkMode ? '#90CAF9' : '#1976d2'} />
-        <Text style={[styles.infoText, isDarkMode && styles.darkModeText]}>
-          Review and approve or reject claim requests for found items.
-        </Text>
-      </View>
-
-      {claimRequests.length > 0 ? (
+      {claimRequests.length === 0 ? (
+        <Text style={[styles.noItemsText, isDarkMode && styles.darkModeText]}>No claim requests.</Text>
+      ) : (
         claimRequests.map((claim) => (
-          <View key={claim.id} style={[styles.claimCard, isDarkMode && styles.darkModeItemCard]}>
-            <View style={styles.claimCardHeader}>
-              <View style={styles.claimInfo}>
-                <Text style={[styles.claimTitle, isDarkMode && styles.darkModeText]}>
-                  {claim.description}
-                </Text>
-                <Text style={[styles.claimSubtitle, isDarkMode && styles.darkModeSubtitle]}>
-                  Found Ref: {claim.foundItemRef}
-                </Text>
-                <Text style={[styles.claimSubtitle, isDarkMode && styles.darkModeSubtitle]}>
-                  Lost Ref: {claim.lostItemRef}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  claim.status === 'Pending' && styles.statusPending,
-                  claim.status === 'Approved' && styles.statusApproved,
-                  claim.status === 'Rejected' && styles.statusRejected,
-                ]}
-              >
-                <Text style={styles.statusText}>{claim.status}</Text>
-              </View>
-            </View>
-
-            <View style={styles.claimCardBody}>
-              <View style={styles.claimDetail}>
-                <MaterialIcons name="email" size={16} color={isDarkMode ? '#bbb' : '#666'} />
-                <Text style={[styles.claimDetailText, isDarkMode && styles.darkModeDetailText]}>
-                  {claim.userContact}
-                </Text>
-              </View>
-              <View style={styles.claimDetail}>
-                <MaterialIcons name="calendar-today" size={16} color={isDarkMode ? '#bbb' : '#666'} />
-                <Text style={[styles.claimDetailText, isDarkMode && styles.darkModeDetailText]}>
-                  Submitted: {claim.submittedDate}
-                </Text>
-              </View>
-            </View>
-
-            {claim.status === 'Pending' && (
-              <View style={styles.claimActions}>
+          <View key={claim._id} style={[styles.itemCard, isDarkMode && styles.darkModeCard]}>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Lost Item Ref: {claim.lostItemRef}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Found Item Ref: {claim.foundItemRef}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Description: {claim.description}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Contact: {claim.userContact}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Match Confidence: {claim.matchConfidence}
+            </Text>
+            <Text style={[styles.itemText, isDarkMode && styles.darkModeText]}>
+              Status: {claim.status}
+            </Text>
+            {claim.status === 'Claim Requested' && (
+              <View style={styles.actionButtons}>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.approveButton]}
-                  onPress={() => handleClaimAction(claim.id, 'approve')}
+                  style={[styles.actionButton, styles.approveButton, isLoading && styles.disabledButton]}
+                  onPress={() => handleClaimAction(claim._id, 'approve')}
+                  disabled={isLoading}
                 >
                   <Text style={styles.actionButtonText}>Approve</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => handleClaimAction(claim.id, 'reject')}
+                  style={[styles.actionButton, styles.rejectButton, isLoading && styles.disabledButton]}
+                  onPress={() => handleClaimAction(claim._id, 'reject')}
+                  disabled={isLoading}
                 >
                   <Text style={styles.actionButtonText}>Reject</Text>
                 </TouchableOpacity>
@@ -604,767 +491,412 @@ const LostFoundDriver = ({ navigation }) => {
             )}
           </View>
         ))
-      ) : (
-        <View style={styles.emptyState}>
-          <MaterialIcons
-            name="assignment-turned-in"
-            size={64}
-            color={isDarkMode ? '#555' : '#ccc'}
-          />
-          <Text style={[styles.emptyStateText, isDarkMode && styles.darkModeText]}>
-            No claim requests yet
-          </Text>
-        </View>
       )}
     </ScrollView>
   );
 
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.darkModeBackground]}>
-      {/* Header */}
-      <View style={[styles.header, isDarkMode && styles.darkModeHeader]}>
-        <TouchableOpacity onPress={toggleSidebar}>
-          <Feather name="menu" size={24} color={isDarkMode ? '#fff' : '#333'} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, isDarkMode && styles.darkModeText]}>
-          Staff Lost & Found
-        </Text>
-        <View style={styles.headerRightActions}>
-          <TouchableOpacity onPress={toggleDarkMode} style={styles.iconButton}>
-            {isDarkMode ? (
-              <Feather name="sun" size={22} color="#fff" />
-            ) : (
-              <Feather name="moon" size={22} color="#333" />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setNotificationsVisible(true)}
-            style={styles.iconButton}
-          >
-            <Feather name="bell" size={22} color={isDarkMode ? '#fff' : '#333'} />
-            {getUnreadNotificationsCount() > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {getUnreadNotificationsCount()}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Tab Navigation */}
-      <View style={[styles.tabBar, isDarkMode && styles.darkModeTabBar]}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'report' && styles.activeTabItem]}
-          onPress={() => handleTabChange('report')}
-        >
-          <MaterialIcons
-            name="report"
-            size={22}
-            color={
-              activeTab === 'report'
-                ? isDarkMode
-                  ? '#90CAF9'
-                  : '#1976d2'
-                : isDarkMode
-                ? '#aaa'
-                : '#666'
-            }
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'report' && styles.activeTabText,
-              isDarkMode && styles.darkModeTabText,
-              activeTab === 'report' && isDarkMode && styles.darkModeActiveTabText,
-            ]}
-          >
-            Report Found
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'found' && styles.activeTabItem]}
-          onPress={() => handleTabChange('found')}
-        >
-          <MaterialIcons
-            name="inventory"
-            size={22}
-            color={
-              activeTab === 'found'
-                ? isDarkMode
-                  ? '#90CAF9'
-                  : '#1976d2'
-                : isDarkMode
-                ? '#aaa'
-                : '#666'
-            }
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'found' && styles.activeTabText,
-              isDarkMode && styles.darkModeTabText,
-              activeTab === 'found' && isDarkMode && styles.darkModeActiveTabText,
-            ]}
-          >
-            Found Items
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'claims' && styles.activeTabItem]}
-          onPress={() => handleTabChange('claims')}
-        >
-          <MaterialIcons
-            name="assignment-turned-in"
-            size={22}
-            color={
-              activeTab === 'claims'
-                ? isDarkMode
-                  ? '#90CAF9'
-                  : '#1976d2'
-                : isDarkMode
-                ? '#aaa'
-                : '#666'
-            }
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'claims' && styles.activeTabText,
-              isDarkMode && styles.darkModeTabText,
-              activeTab === 'claims' && isDarkMode && styles.darkModeActiveTabText,
-            ]}
-          >
-            Claims
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingContainer}
+        style={styles.keyboardAvoidingView}
       >
+        <View style={[styles.header, isDarkMode && styles.darkModeHeader]}>
+          <TouchableOpacity onPress={toggleSidebar}>
+            <Feather name="menu" size={24} color={isDarkMode ? '#fff' : '#000'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, isDarkMode && styles.darkModeText]}>Lost & Found (Staff)</Text>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={() => setNotificationsVisible(true)}>
+              <Feather name="bell" size={24} color={isDarkMode ? '#fff' : '#000'} />
+              {getUnreadNotificationsCount() > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{getUnreadNotificationsCount()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={toggleDarkMode}>
+              <MaterialIcons
+                name={isDarkMode ? 'light-mode' : 'dark-mode'}
+                size={24}
+                color={isDarkMode ? '#fff' : '#000'}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {isTipVisible && (
+          <Animated.View style={[styles.tipBox, { opacity: tipOpacity }, isDarkMode && styles.darkModeCard]}>
+            <Text style={[styles.tipText, isDarkMode && styles.darkModeText]}>
+              Tip: Ensure accurate details to help match found items with lost reports!
+            </Text>
+            <TouchableOpacity onPress={() => setIsTipVisible(false)}>
+              <Feather name="x" size={20} color={isDarkMode ? '#fff' : '#000'} />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        <View style={[styles.tabContainer, isDarkMode && styles.darkModeBackground]}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'report' && styles.activeTab, isDarkMode && styles.darkModeTab]}
+            onPress={() => handleTabChange('report')}
+          >
+            <Text style={[styles.tabText, activeTab === 'report' && styles.activeTabText, isDarkMode && styles.darkModeText]}>
+              Report
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'found' && styles.activeTab, isDarkMode && styles.darkModeTab]}
+            onPress={() => handleTabChange('found')}
+          >
+            <Text style={[styles.tabText, activeTab === 'found' && styles.activeTabText, isDarkMode && styles.darkModeText]}>
+              Found Items
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'claims' && styles.activeTab, isDarkMode && styles.darkModeTab]}
+            onPress={() => handleTabChange('claims')}
+          >
+            <Text style={[styles.tabText, activeTab === 'claims' && styles.activeTabText, isDarkMode && styles.darkModeText]}>
+              Claims
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {activeTab === 'report' && renderReportForm()}
         {activeTab === 'found' && renderFoundItems()}
         {activeTab === 'claims' && renderClaims()}
-      </KeyboardAvoidingView>
 
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#1976d2" />
-        </View>
-      )}
-
-      <Modal
-        visible={notificationsVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setNotificationsVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={[styles.notificationsModal, isDarkMode && styles.darkModeModal]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, isDarkMode && styles.darkModeText]}>
-                Notifications
-              </Text>
+        <Modal
+          visible={notificationsVisible}
+          animationType="slide"
+          onRequestClose={() => setNotificationsVisible(false)}
+        >
+          <SafeAreaView style={[styles.modalContainer, isDarkMode && styles.darkModeBackground]}>
+            <View style={[styles.modalHeader, isDarkMode && styles.darkModeHeader]}>
+              <Text style={[styles.modalTitle, isDarkMode && styles.darkModeText]}>Notifications</Text>
               <TouchableOpacity onPress={() => setNotificationsVisible(false)}>
-                <MaterialIcons
-                  name="close"
-                  size={24}
-                  color={isDarkMode ? '#fff' : '#333'}
-                />
+                <Feather name="x" size={24} color={isDarkMode ? '#fff' : '#000'} />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={styles.notificationsList}>
-              {notifications.length > 0 ? (
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+              {notifications.length === 0 ? (
+                <Text style={[styles.noItemsText, isDarkMode && styles.darkModeText]}>No notifications</Text>
+              ) : (
                 notifications.map((notification) => (
                   <TouchableOpacity
-                    key={notification.id}
-                    style={[
-                      styles.notificationItem,
-                      !notification.isRead && styles.unreadNotification,
-                      isDarkMode && styles.darkModeNotificationItem,
-                      !notification.isRead &&
-                        isDarkMode &&
-                        styles.darkModeUnreadNotification,
-                    ]}
-                    onPress={() => markNotificationAsRead(notification.id)}
+                    key={notification._id}
+                    style={[styles.notificationItem, !notification.isRead && styles.unreadNotification, isDarkMode && styles.darkModeCard]}
+                    onPress={() => markNotificationAsRead(notification._id)}
                   >
-                    <View style={styles.notificationContent}>
-                      <Text
-                        style={[styles.notificationTitle, isDarkMode && styles.darkModeText]}
-                      >
-                        {notification.title}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.notificationMessage,
-                          isDarkMode && styles.darkModeSubtitle,
-                        ]}
-                      >
-                        {notification.message}
-                      </Text>
-                      <Text style={[styles.notificationTime, isDarkMode && { color: '#aaa' }]}>
-                        {notification.time}
-                      </Text>
-                    </View>
-                    {!notification.isRead && <View style={styles.notificationDot} />}
+                    <Text style={[styles.notificationTitle, isDarkMode && styles.darkModeText]}>
+                      {notification.title}
+                    </Text>
+                    <Text style={[styles.notificationText, isDarkMode && styles.darkModeText]}>
+                      {notification.message}
+                    </Text>
+                    <Text style={[styles.notificationTime, isDarkMode && styles.darkModeText]}>
+                      {new Date(notification.time).toLocaleString()}
+                    </Text>
                   </TouchableOpacity>
                 ))
-              ) : (
-                <View style={styles.emptyNotifications}>
-                  <MaterialIcons
-                    name="notifications-off"
-                    size={48}
-                    color={isDarkMode ? '#555' : '#ccc'}
-                  />
-                  <Text
-                    style={[styles.emptyNotificationsText, isDarkMode && styles.darkModeText]}
-                  >
-                    No notifications yet
-                  </Text>
-                </View>
               )}
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+          </SafeAreaView>
+        </Modal>
 
-      <SidebarDriver
-        visible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        navigation={navigation}
-      />
+        <SidebarDriver
+  visible={sidebarVisible}
+  onClose={() => setSidebarVisible(false)}
+  navigation={navigation}
+/>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  darkModeBackground: {
-    backgroundColor: '#121212',
+  keyboardAvoidingView: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    alignItems: 'center',
+    padding: 15,
     backgroundColor: '#fff',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  darkModeHeader: {
-    backgroundColor: '#1e1e1e',
-    shadowColor: '#000',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
   },
-  darkModeText: {
-    color: '#fff',
-  },
-  darkModeSubtitle: {
-    color: '#aaa',
-  },
-  darkModeDetailText: {
-    color: '#bbb',
-  },
-  headerRightActions: {
+  headerIcons: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  iconButton: {
-    marginLeft: 16,
-    position: 'relative',
+    gap: 15,
   },
   notificationBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#f44336',
+    right: -8,
+    top: -8,
+    backgroundColor: 'red',
     borderRadius: 10,
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   notificationBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
   },
-  tabBar: {
+  tipBox: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    elevation: 1,
-  },
-  darkModeTabBar: {
-    backgroundColor: '#1e1e1e',
-    borderBottomColor: '#333',
-  },
-  tabItem: {
-    flex: 1,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: '#e0f7fa',
+    padding: 10,
+    marginHorizontal: 15,
+    marginVertical: 10,
+    borderRadius: 8,
   },
-  activeTabItem: {
+  tipText: {
+    flex: 1,
+    color: '#00796b',
+    fontSize: 14,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  tab: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#1976d2',
+    borderBottomColor: '#007bff',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
-    marginLeft: 6,
-  },
-  darkModeTabText: {
-    color: '#aaa',
   },
   activeTabText: {
-    color: '#1976d2',
-    fontWeight: '500',
-  },
-  darkModeActiveTabText: {
-    color: '#90CAF9',
-  },
-  keyboardAvoidingContainer: {
-    flex: 1,
+    color: '#007bff',
+    fontWeight: 'bold',
   },
   formContainer: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#f5f5f5',
+  },
+  scrollContent: {
+    padding: 15,
+    paddingBottom: 100, // Extra padding to ensure submit button is fully visible
   },
   formTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#333',
-  },
-  formGroup: {
-    marginBottom: 16,
+    marginBottom: 15,
   },
   label: {
     fontSize: 14,
-    marginBottom: 8,
-    color: '#333',
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 5,
+    marginTop: 10,
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#ccc',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#333',
+    padding: 10,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    marginBottom: 10,
   },
-  darkModeInput: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#444',
-    color: '#fff',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  row: {
+  itemTypeContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    marginBottom: 15,
+    gap: 10,
   },
-  halfWidth: {
-    width: '48%',
+  itemTypeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    minWidth: 100, // Ensure buttons are wide enough
+  },
+  selectedItemType: {
+    backgroundColor: '#007bff',
+    borderColor: '#007bff',
+  },
+  itemTypeText: {
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  uploadButton: {
+    backgroundColor: '#007bff',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  uploadButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 15,
+    resizeMode: 'cover',
   },
   submitButton: {
-    backgroundColor: '#1976d2',
+    backgroundColor: '#007bff',
+    padding: 15,
     borderRadius: 8,
-    padding: 16,
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 32,
+    marginTop: 10,
+    marginBottom: 20,
   },
   submitButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  loadingOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  imageUploadContainer: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 16,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 140,
-  },
-  darkModeImageUpload: {
-    borderColor: '#444',
-    backgroundColor: '#2a2a2a',
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadButtonText: {
-    color: '#1976d2',
-    marginLeft: 8,
-    fontSize: 16,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-    resizeMode: 'cover',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
   itemCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  darkModeItemCard: {
-    backgroundColor: '#2a2a2a',
-    shadowColor: '#000',
+  itemText: {
+    fontSize: 14,
+    marginBottom: 5,
   },
-  itemCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+  itemImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    marginTop: 10,
   },
-  itemInfo: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  itemSubtitle: {
-    fontSize: 12,
-    color: '#666',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    backgroundColor: '#e0e0e0',
-  },
-  statusStored: {
-    backgroundColor: '#2196f3',
-  },
-  statusClaimed: {
-    backgroundColor: '#4caf50',
-  },
-  statusPending: {
-    backgroundColor: '#ffb74d',
-  },
-  statusApproved: {
-    backgroundColor: '#4caf50',
-  },
-  statusRejected: {
-    backgroundColor: '#f44336',
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  itemCardBody: {
-    marginBottom: 12,
-  },
-  itemDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  itemDetailText: {
-    marginLeft: 8,
+  noItemsText: {
     fontSize: 14,
     color: '#666',
-  },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  darkModeDetailsButton: {
-    color: '#90CAF9',
-  },
-  viewDetailsButtonText: {
-    fontSize: 14,
-    color: '#1976d2',
-    fontWeight: '500',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 16,
     textAlign: 'center',
+    marginTop: 20,
   },
-  claimCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  claimCardHeader: {
+  actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  claimInfo: {
-    flex: 1,
-  },
-  claimTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  claimSubtitle: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
-  },
-  claimCardBody: {
-    marginBottom: 12,
-  },
-  claimDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  claimDetailText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#666',
-  },
-  claimActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 10,
+    gap: 10,
   },
   actionButton: {
     flex: 1,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginHorizontal: 4,
   },
   approveButton: {
-    backgroundColor: '#4caf50',
+    backgroundColor: '#28a745',
   },
   rejectButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: '#dc3545',
   },
   actionButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
   },
-  infoBox: {
-    backgroundColor: '#e3f2fd',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-  },
-  darkModeInfoBox: {
-    backgroundColor: '#0d47a1',
-  },
-  infoText: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
-  },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  notificationsModal: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    height: '80%',
-    padding: 16,
-  },
-  darkModeModal: {
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#f5f5f5',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    padding: 15,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
-  },
-  notificationsList: {
-    flex: 1,
   },
   notificationItem: {
-    flexDirection: 'row',
-    padding: 16,
+    padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#ddd',
     backgroundColor: '#fff',
   },
-  darkModeNotificationItem: {
-    backgroundColor: '#1e1e1e',
-    borderBottomColor: '#333',
-  },
   unreadNotification: {
-    backgroundColor: '#f5f9ff',
-  },
-  darkModeUnreadNotification: {
-    backgroundColor: '#263238',
-  },
-  notificationContent: {
-    flex: 1,
+    backgroundColor: '#e0f7fa',
   },
   notificationTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
-    color: '#333',
+    fontWeight: 'bold',
+    marginBottom: 5,
   },
-  notificationMessage: {
+  notificationText: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   notificationTime: {
     fontSize: 12,
-    color: '#999',
-  },
-  notificationDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#1976d2',
-    marginLeft: 8,
-    alignSelf: 'center',
-  },
-  emptyNotifications: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  emptyNotificationsText: {
-    fontSize: 16,
     color: '#666',
-    marginTop: 16,
-    textAlign: 'center',
   },
-  quickSelectContainer: {
-    marginBottom: 8,
+  darkModeBackground: {
+    backgroundColor: '#121212',
   },
-  quickSelectItem: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 8,
+  darkModeHeader: {
+    backgroundColor: '#1f1f1f',
+    borderBottomColor: '#333',
   },
-  darkModeQuickSelectItem: {
-    backgroundColor: '#333',
+  darkModeTab: {
+    backgroundColor: '#1f1f1f',
   },
-  quickSelectItemActive: {
-    backgroundColor: '#e3f2fd',
-    borderColor: '#1976d2',
-    borderWidth: 1,
-  },
-  darkModeQuickSelectItemActive: {
-    backgroundColor: '#0d47a1',
-    borderColor: '#90CAF9',
-  },
-  quickSelectItemText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  quickSelectItemTextActive: {
-    color: '#1976d2',
-    fontWeight: '500',
-  },
-  tipBox: {
-    backgroundColor: '#263238',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tipText: {
+  darkModeText: {
     color: '#fff',
-    flex: 1,
-    marginHorizontal: 8,
-    fontSize: 14,
+  },
+  darkModeInput: {
+    backgroundColor: '#1f1f1f',
+    borderColor: '#444',
+    color: '#fff',
+  },
+  darkModeButton: {
+    backgroundColor: '#1f1f1f',
+    borderColor: '#444',
+  },
+  darkModeCard: {
+    backgroundColor: '#1f1f1f',
+    shadowColor: '#fff',
   },
 });
 

@@ -4,7 +4,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const busRoutes = require('./routes/busRoutes');
 const apiRoutes = require('./routes/api');
-const longDistanceRoutes = require('./routes/longDistanceRoutes'); // Add this line
+const longDistanceRoutes = require('./routes/longDistanceRoutes');
+const lostFoundRoutes = require('./routes/lostFoundRoutes');
 
 // Load environment variables
 dotenv.config();
@@ -20,7 +21,7 @@ app.use(express.json());
 // Root route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Welcome to the TrackNGo Bus Route API. Use /api/bus-routes for bus routes, /api for trip/location data, and /api/long-distance for long-distance routes.' 
+    message: 'Welcome to the TrackNGo Bus Route API. Use /api/bus-routes for bus routes, /api for trip/location data, /api/long-distance for long-distance routes, and /api/lost-found for lost and found.' 
   });
 });
 
@@ -32,7 +33,8 @@ mongoose.connect(mongoURI, {})
 // Routes
 app.use('/api/bus-routes', busRoutes);
 app.use('/api', apiRoutes);
-app.use('/api/long-distance', longDistanceRoutes); // Add this line
+app.use('/api/long-distance', longDistanceRoutes);
+app.use('/api/lost-found', lostFoundRoutes);
 
 // Start the server
 app.listen(port, '192.168.11.179', () => {
