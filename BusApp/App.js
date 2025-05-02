@@ -12,6 +12,8 @@ import RoutesScreen from './screens/RoutesScreen';
 import HomeScreenDriver from './screens/HomeScreenDriver';
 import { UserProvider } from './screens/UserContext';
 import LostFoundDriver from './screens/LostFoundDriverScreen';
+import ChatbotScreen from './screens/ChatbotScreen';
+
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -28,6 +30,7 @@ export default function App() {
           <Stack.Screen name="RoutesScreen" component={RoutesScreen} />
           <Stack.Screen name="HomeScreenDriver" component={HomeScreenDriver} />
           <Stack.Screen name="LostFoundDriver" component={LostFoundDriver} />
+          <Stack.Screen name="ChatbotScreen" component={ChatbotScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </UserProvider>

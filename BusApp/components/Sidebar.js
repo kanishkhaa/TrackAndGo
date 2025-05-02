@@ -152,6 +152,9 @@ const Sidebar = ({ visible, activeMenuItem, onClose, onMenuItemPress, onSignOut 
       case 'settings':
         navigation.navigate('SettingsScreen');
         break;
+      case 'chatbot':
+      navigation.navigate('ChatbotScreen'); // 👈 Add this line
+      break;
       default:
         break;
     }
@@ -217,6 +220,13 @@ const Sidebar = ({ visible, activeMenuItem, onClose, onMenuItemPress, onSignOut 
             activeMenuItem={activeMenuItem}
             onPress={handleNavigation}
           />
+          <SidebarItem 
+  label="Chatbot"
+  icon="chatbubble-ellipses-outline"
+  menuItem="chatbot"
+  activeMenuItem={activeMenuItem}
+  onPress={handleNavigation}
+/>
           <SidebarItem 
             label="Settings"
             icon="settings"
