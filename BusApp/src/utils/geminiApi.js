@@ -6,9 +6,10 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 export const generateTravelTips = async (fromLocation, toLocation, journeyDetails = {}) => {
   try {
     const prompt = `
-      You are a travel assistant. Generate 3-5 concise, practical travel tips for a bus journey from ${fromLocation} to ${toLocation}. 
-      Consider the following journey details: ${JSON.stringify(journeyDetails)}.
-      The tips should be relevant to the route, bus travel, and general travel advice. 
+      You are a travel assistant specializing in personalized travel advice. Generate 3-5 concise, practical travel tips tailored specifically to a bus journey arriving at ${toLocation}. 
+      Focus on aspects unique to ${toLocation}, such as local weather, cultural norms, transportation options at the destination, or destination-specific travel advice. 
+      Consider the journey details for context: ${JSON.stringify(journeyDetails)}.
+      The tips should be relevant to bus travel and the destination's characteristics.
       Format the response as a JSON array of strings, e.g., ["Tip 1", "Tip 2", "Tip 3"].
     `;
 
@@ -34,9 +35,9 @@ export const generateTravelTips = async (fromLocation, toLocation, journeyDetail
   } catch (error) {
     console.error('Gemini API Error (Travel Tips):', error.response?.data || error.message);
     return [
-      'Book tickets in advance during peak hours.',
-      'Keep small change ready for bus fare.',
-      'Arrive at the bus stop 10 minutes early.',
+      `Check the weather forecast for ${toLocation} and dress accordingly.`,
+      `Learn a few local phrases used in ${toLocation} to communicate better.`,
+      `Download a map of ${toLocation} for offline use in case of poor connectivity.`,
     ];
   }
 };

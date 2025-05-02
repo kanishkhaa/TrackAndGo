@@ -506,21 +506,6 @@ const JourneyPlannerScreen = () => {
             scrollEnabled={true}
             zoomEnabled={true}
           />
-          <TouchableOpacity
-            style={styles.travelTipsButton}
-            onPress={() => {
-              setShowTravelTips(true);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            }}
-          >
-            <LinearGradient
-              colors={[THEME_COLOR, '#0d47a1']}
-              style={styles.gradientButton}
-            >
-              <MaterialIcons name="lightbulb-outline" size={18} color="#fff" />
-              <Text style={styles.travelTipsButtonText}>Travel Tips</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -707,18 +692,35 @@ const JourneyPlannerScreen = () => {
           </View>
 
           {!trackingJourney && (
-            <TouchableOpacity
-              style={styles.startJourneyButton}
-              onPress={startJourney}
-            >
-              <LinearGradient
-                colors={[SUCCESS_COLOR, '#2E7D32']}
-                style={styles.gradientButton}
+            <>
+              <TouchableOpacity
+                style={styles.startJourneyButton}
+                onPress={startJourney}
               >
-                <Text style={styles.startJourneyButtonText}>Let's Start the Journey</Text>
-                <MaterialIcons name="directions" size={20} color="#fff" />
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[SUCCESS_COLOR, '#2E7D32']}
+                  style={styles.gradientButton}
+                >
+                  <Text style={styles.startJourneyButtonText}>Let's Start the Journey</Text>
+                  <MaterialIcons name="directions" size={20} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.travelTipsButton, { marginTop: 12 }]}
+                onPress={() => {
+                  setShowTravelTips(true);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }}
+              >
+                <LinearGradient
+                  colors={[THEME_COLOR, '#0d47a1']}
+                  style={styles.gradientButton}
+                >
+                  <MaterialIcons name="lightbulb-outline" size={18} color="#fff" />
+                  <Text style={styles.travelTipsButtonText}>Travel Tips</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
@@ -1324,8 +1326,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 8,
     overflow: 'hidden',
-    alignSelf: 'center',
-    width: '50%',
   },
   travelTipsButtonText: {
     color: '#fff',
