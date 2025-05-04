@@ -45,27 +45,34 @@ export const generateTravelTips = async (fromLocation, toLocation, journeyDetail
 export const generateAlternateRoutes = async (fromLocation, toLocation, primaryRoute) => {
   try {
     const prompt = `
-      You are a travel assistant specializing in route optimization. The user is planning a bus journey from ${fromLocation} to ${toLocation}. 
+      You are an expert travel assistant specializing in optimizing bus travel routes. The user is planning a bus journey from ${fromLocation} to ${toLocation}. 
       The primary route has the following details: ${JSON.stringify(primaryRoute)}.
-      Suggest up to 2 alternate routes that reduce travel time compared to the primary route's ${primaryRoute.totalDuration}. 
-      Each alternate route should include:
-      - Starting point and destination
-      - List of intermediate stops (if any)
-      - Estimated travel time (in hours and minutes, e.g., "4h 15m")
-      - A brief reason why this route is faster (e.g., "Fewer stops" or "Direct express bus")
-      - Transport mode (e.g., "Bus", "Train", or "Combination")
+      
+      Suggest up to 2 alternate bus routes that are practical, realistic, and aim to reduce travel time compared to the primary route's ${primaryRoute.totalDuration}. 
+      Each alternate route must:
+      - Use buses only (no trains or other transport modes).
+      - Include the starting point (${fromLocation}) and destination (${toLocation}).
+      - List intermediate stops (if any, limited to 1-3 stops to keep the route efficient).
+      - Provide an estimated travel time in the format "Xh Ym" (e.g., "4h 15m"), ensuring it is shorter than the primary route's ${primaryRoute.totalDuration}.
+      - Include a specific reason why this bus route is faster (e.g., "Uses an express bus with no stops," "Fewer intermediate stops reduce travel time," "Route uses a highway instead of city roads," or "Avoids congested areas during peak hours").
+      - Specify the bus type (e.g., "Standard Bus," "Express Bus," "Luxury Bus").
+      - Consider the bus infrastructure of ${fromLocation} and ${toLocation} (e.g., major bus terminals, express bus availability, or road conditions).
+      - Avoid impractical routes (e.g., routes with unavailable bus services, excessive detours, or unrealistic travel times).
+
+      Ensure the alternate routes are diverse (e.g., one might use an express bus with no stops, another might take a different route with fewer stops or a faster road).
+      If no faster bus routes are possible, return an empty array.
+
       Return the response as a JSON array of objects, e.g.:
       [
         {
-          "from": "Chennai",
-          "to": "Bangalore",
-          "stops": ["Krishnagiri"],
+          "from": "${fromLocation}",
+          "to": "${toLocation}",
+          "stops": ["Intermediate Stop"],
           "travelTime": "4h 15m",
-          "reason": "Direct express bus with fewer stops",
-          "mode": "Bus"
+          "reason": "Express bus with no intermediate stops",
+          "mode": "Express Bus"
         }
       ]
-      If no faster routes are possible, return an empty array.
     `;
 
     const response = await axios.post(

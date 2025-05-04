@@ -698,7 +698,6 @@ const HomeScreenDriver = ({ navigation, route }) => {
           </View>
           <View style={styles.tripInfoRow}>
             <MaterialIcons name="schedule" size={20} color="#10B981" />
-            <Text style={styles.tripInfoText}>ETA: {estimatedArrival}</Text>
           </View>
           <TouchableOpacity
             style={[

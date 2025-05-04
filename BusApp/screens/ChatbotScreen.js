@@ -38,6 +38,9 @@ const LANGUAGES = [
   { code: 'zh', name: 'Chinese', example: '你好' },
   { code: 'hi', name: 'Hindi', example: 'नमस्ते' },
   { code: 'ta', name: 'Tamil', example: 'வணக்கம்' },
+  { code: 'te', name: 'Telugu', example: 'హలో' },
+  { code: 'kn', name: 'Kannada', example: 'ನಮಸ್ಕಾರ' },
+  { code: 'ml', name: 'Malayalam', example: 'നമസ്കാരം' },
   { code: 'ar', name: 'Arabic', example: 'مرحبا' },
 ];
 
@@ -150,24 +153,50 @@ const ChatbotScreen = ({ navigation }) => {
   const speakMessage = (messageId, text) => {
     Speech.stop();
     setSpeakingMessageId(messageId);
-    
+
+    // Language-specific arrow replacements for natural speech
+    const arrowReplacements = {
+      en: ' to ',
+      es: ' a ',
+      fr: ' à ',
+      de: ' nach ',
+      it: ' a ',
+      pt: ' para ',
+      ru: ' до ',
+      ja: ' へ ',
+      ko: ' 에게 ',
+      zh: ' 到 ',
+      hi: ' से ',
+      ta: ' முதல் ',
+      te: ' నుండి ',
+      kn: ' ರಿಂದ ',
+      ml: ' മുതൽ ',
+      ar: ' إلى ',
+    };
+
+    // Replace arrows with language-specific phrase
+    const cleanedText = text.replace(/→/g, arrowReplacements[language] || ' to ');
+
     const speechLanguageMap = {
-      'en': 'en-US',
-      'es': 'es-ES',
-      'fr': 'fr-FR',
-      'de': 'de-DE',
-      'it': 'it-IT',
-      'pt': 'pt-PT',
-      'ru': 'ru-RU',
-      'ja': 'ja-JP',
-      'ko': 'ko-KR',
-      'zh': 'zh-CN',
-      'hi': 'hi-IN',
-      'ta': 'ta-IN',
-      'ar': 'ar-SA',
+      en: 'en-US',
+      es: 'es-ES',
+      fr: 'fr-FR',
+      de: 'de-DE',
+      it: 'it-IT',
+      pt: 'pt-PT',
+      ru: 'ru-RU',
+      ja: 'ja-JP',
+      ko: 'ko-KR',
+      zh: 'zh-CN',
+      hi: 'hi-IN',
+      ta: 'ta-IN',
+      te: 'te-IN',
+      kn: 'kn-IN',
+      ml: 'ml-IN',
+      ar: 'ar-SA',
     };
     
-    Speech.speak(text, {
+    Speech.speak(cleanedText, {
       language: speechLanguageMap[language] || 'en-US',
       onDone: () => setSpeakingMessageId(null),
       onError: () => setSpeakingMessageId(null),
@@ -255,19 +284,22 @@ const ChatbotScreen = ({ navigation }) => {
 
   const getPlaceholder = () => {
     const placeholders = {
-      'en': 'Type your message...',
-      'es': 'Escribe tu mensaje...',
-      'fr': 'Tapez votre message...',
-      'de': 'Nachricht eingeben...',
-      'it': 'Scrivi un messaggio...',
-      'pt': 'Digite sua mensagem...',
-      'ru': 'Введите сообщение...',
-      'ja': 'メッセージを入力...',
-      'ko': '메시지를 입력하세요...',
-      'zh': '输入消息...',
-      'hi': 'अपना संदेश लिखें...',
-      'ta': 'உங்கள் செய்தியை உள்ளிடவும்...',
-      'ar': 'اكتب رسالتك...',
+      en: 'Type your message...',
+      es: 'Escribe tu mensaje...',
+      fr: 'Tapez votre message...',
+      de: 'Nachricht eingeben...',
+      it: 'Scrivi un messaggio...',
+      pt: 'Digite sua mensagem...',
+      ru: 'Введите сообщение...',
+      ja: 'メッセージを入力...',
+      ko: '메시지를 입력하세요...',
+      zh: '输入消息...',
+      hi: 'अपना संदेश लिखें...',
+      ta: 'உங்கள் செய்தியை உள்ளிடவும்...',
+      te: 'మీ సందేశాన్ని టైప్ చేయండి...',
+      kn: 'ನಿಮ್ಮ ಸಂದೇಶವನ್ನು ಟೈಪ್ ಮಾಡಿ...',
+      ml: 'നിന്റെ സന്ദേശം ടൈപ്പ് ചെയ്യുക...',
+      ar: 'اكتب رسالتك...',
     };
     
     return placeholders[language] || 'Type your message...';

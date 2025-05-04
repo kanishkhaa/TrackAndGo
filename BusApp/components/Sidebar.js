@@ -177,7 +177,7 @@ const Sidebar = ({ visible, activeMenuItem, onClose, onMenuItemPress, onSignOut 
     <View style={[sidebarStyles.container, { display: visible ? 'flex' : 'none' }]}>
       <View style={sidebarStyles.sidebar}>
         <View style={sidebarStyles.header}>
-          <Text style={sidebarStyles.title}>Bus Tracker</Text>
+          <Text style={sidebarStyles.title}>TrackNGo</Text>
           <TouchableOpacity onPress={onClose}>
             <Ionicons name="close" size={24} color="#333" />
           </TouchableOpacity>

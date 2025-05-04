@@ -255,16 +255,12 @@ const JourneyPlannerScreen = () => {
           type: 'Long-Distance',
           duration: route.travel_time,
           eta: route.departures_from_start[0] || 'N/A',
-          price: '₹500',
-          occupancy: '50%',
-          amenities: ['AC', 'WiFi'],
           coordinates,
           stops: locations,
           mode: 'Bus',
           reason: 'Primary route provided by the system',
         }],
         totalDuration: route.travel_time,
-        totalPrice: '₹500',
         transfers: 0,
         carbonFootprint: '5.0 kg CO₂',
         totalMinutes,
@@ -294,16 +290,12 @@ const JourneyPlannerScreen = () => {
               type: altRoute.mode,
               duration: altRoute.travelTime,
               eta: 'N/A',
-              price: '₹550',
-              occupancy: '45%',
-              amenities: ['AC'],
               coordinates: altCoordinates,
               stops: altLocations,
               mode: altRoute.mode,
               reason: altRoute.reason,
             }],
             totalDuration: altRoute.travelTime,
-            totalPrice: '₹550',
             transfers: altRoute.stops.length,
             carbonFootprint: '4.5 kg CO₂',
             totalMinutes: altTotalMinutes,
@@ -628,8 +620,6 @@ const JourneyPlannerScreen = () => {
                 <Text style={styles.journeyStatText}>{selectedJourney.totalDuration}</Text>
                 <MaterialIcons name="multiple-stop" size={14} color="#555" />
                 <Text style={styles.journeyStatText}>{selectedJourney.transfers} transfers</Text>
-                <MaterialIcons name="account-balance-wallet" size={14} color="#555" />
-                <Text style={styles.journeyStatText}>{selectedJourney.totalPrice}</Text>
               </View>
             </View>
 
@@ -826,13 +816,6 @@ const JourneyPlannerScreen = () => {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.segmentBadges}>
-                    {segment.amenities.map((amenity, i) => (
-                      <View key={i} style={styles.amenityBadge}>
-                        <Text style={styles.badgeText}>{amenity}</Text>
-                      </View>
-                    ))}
-                  </View>
                   {segment.reason && (
                     <Text style={styles.segmentReason}>Note: {segment.reason}</Text>
                   )}
@@ -841,14 +824,6 @@ const JourneyPlannerScreen = () => {
                     <View style={styles.segmentDetail}>
                       <MaterialIcons name="access-time" size={16} color="#666" />
                       <Text style={styles.segmentInfo}>{segment.duration}</Text>
-                    </View>
-                    <View style={styles.segmentDetail}>
-                      <MaterialIcons name="attach-money" size={16} color="#666" />
-                      <Text style={styles.segmentInfo}>{segment.price}</Text>
-                    </View>
-                    <View style={styles.segmentDetail}>
-                      <MaterialIcons name="people" size={16} color="#666" />
-                      <Text style={styles.segmentInfo}>{segment.occupancy}</Text>
                     </View>
                   </View>
 
@@ -1637,24 +1612,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 4,
-  },
-  segmentBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  amenityBadge: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  badgeText: {
-    fontSize: 12,
-    color: '#2E7D32',
-    fontWeight: '500',
   },
   segmentReason: {
     fontSize: 13,

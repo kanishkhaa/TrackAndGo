@@ -51,7 +51,7 @@ const LostFoundDriver = ({ navigation }) => {
 
   // Predefined item types and vehicle numbers
   const commonItemTypes = ['Wallet', 'Phone', 'Keys', 'Bag', 'Umbrella', 'Headphones', 'Laptop', 'Clothing', 'Other'];
-  const commonVehicleNumbers = ['Bus 42', 'Bus 105', 'Train Line 1', 'Train Line 3', 'Metro A', 'Metro B', 'Tram 7'];
+  const commonVehicleNumbers = ['Bus 42', 'Bus 105', 'Bus 11A', 'Bus 12E', 'Bus 14', 'Bus 12C', 'Bus 11C'];
   const commonStorageLocations = ['Central Station', 'West End Terminal', 'North Square', 'Market Street', 'University Stop', 'Airport Terminal'];
   const [selectedItemType, setSelectedItemType] = useState(null);
   const [selectedVehicleNumber, setSelectedVehicleNumber] = useState(null);
