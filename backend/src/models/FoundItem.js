@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 // Define the schema
 const foundItemSchema = new mongoose.Schema({
   description: { type: String, required: true },

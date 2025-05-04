@@ -7,6 +7,7 @@ const apiRoutes = require('./routes/api');
 const longDistanceRoutes = require('./routes/longDistanceRoutes');
 const lostFoundRoutes = require('./routes/lostFoundRoutes');
 
+
 // Load environment variables
 dotenv.config();
 

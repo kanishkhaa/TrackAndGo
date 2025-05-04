@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const userSubscriptionSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   routeId: { type: String, required: true },

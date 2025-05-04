@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const BusRoute = require('../models/BusRoute');
 
+
 // Get all bus routes
 router.get('/', async (req, res) => {
   try {

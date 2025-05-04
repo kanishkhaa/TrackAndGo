@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const claimSchema = new mongoose.Schema({
   lostItemRef: { type: String, required: true },
   foundItemRef: { type: String, required: true },

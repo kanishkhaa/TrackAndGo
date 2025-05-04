@@ -4,6 +4,8 @@ const busLocationSchema = new mongoose.Schema({
   driverId: { type: String, required: true },
   busDetails: { type: String },
   routeNumber: { type: String },
+
+  
   crowdness: { type: String },
   startTime: { type: String },
   type: { type: String, enum: ['trip', 'location'], required: true },

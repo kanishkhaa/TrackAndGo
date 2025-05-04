@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const LongDistanceRoute = require('../models/LongDistanceRoute');
 
+
 // Get routes by from and to locations
 router.get('/route/:from/:to', async (req, res) => {
   try {

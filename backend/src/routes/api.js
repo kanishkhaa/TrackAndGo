@@ -4,6 +4,7 @@ const BusLocation = require('../models/BusLocation');
 const BusRoute = require('../models/BusRoute');
 const UserSubscription = require('../models/UserSubscription');
 
+
 router.post('/driver-locations', async (req, res) => {
   try {
     const { driverId, busDetails, latitude, longitude } = req.body;

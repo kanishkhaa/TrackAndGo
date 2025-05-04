@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const longDistanceRouteSchema = new mongoose.Schema({
   route: String,
   travel_time: String,
