@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const LongDistanceRoute = require('../src/models/LongDistanceRoute');
 
+
 // MongoDB connection URI
 const mongoURI = 'mongodb://localhost:27017/bus_data';
 

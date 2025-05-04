@@ -5,6 +5,7 @@
     "bus_stops": ["Sankagiri"],
     "departures_from_erode": ["08:30", "20:30", "21:45"]
   },
+  
   {
     "route": "Erode to Omalur",
     "travel_time": "02:00 hrs",

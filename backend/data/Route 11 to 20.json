@@ -14,6 +14,8 @@
           "last_bus": "18:20",
           "departures": ["08:00", "10:15", "15:45", "18:20"]
         },
+
+        
         "from_anuvavi_subramaniya_temple": {
           "first_bus": "09:00",
           "last_bus": "19:30",

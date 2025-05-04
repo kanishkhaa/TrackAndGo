@@ -8,6 +8,8 @@
       "bus_stops": ["New Bus Stand", "Kavundampalayam", "Thudiyalur", "Narasimhanaickenpalayam", "Periyanaickenpalayam"],
       "daily_buses": "Several",
       "travel_time": "01:15 hrs",
+
+      
       "timings": {
         "from_gandhipuram": {
           "first_bus": "05:45",
