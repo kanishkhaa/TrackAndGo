@@ -10,6 +10,8 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { UserContext } from '../screens/UserContext';
 
+
+
 const sidebarStyles = StyleSheet.create({
   container: {
     position: 'absolute',

@@ -9,6 +9,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../screens/UserContext';
 
+
+
 const SidebarDriver = ({ visible, onClose, navigation }) => {
   const { user } = useContext(UserContext);
   const [activeMenuItem, setActiveMenuItem] = useState('Home');
